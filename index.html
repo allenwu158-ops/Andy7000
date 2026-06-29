@@ -6923,14 +6923,14 @@ async function studyQuery(word,mode,idx){
     const reqBody={system_instruction:{parts:[{text:prompt}]},contents:[{role:"user",parts:[{text:question}]}],generationConfig:{temperature:0}};
     const resp=await fetch("https://gemini-proxy.allenwu158.workers.dev",{
       method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({model:"gemini-2.0-flash-lite",payload:reqBody})
+      body:JSON.stringify({system:prompt,user:question})
     });
     const data=await resp.json();
     if(data.error){
-      txt.textContent=(data.error.code===429||data.error.code===503)?"Google API 今日免費額度已用完，請明天再試。":"暫時無法連線，請稍後再試。";
+      txt.textContent="暫時無法連線，請稍後再試。";
       txt.style.color="#c00";return;
     }
-    const reply=data?.candidates?.[0]?.content?.parts?.[0]?.text||"無法取得回答";
+    const reply=data?.reply||"無法取得回答";
     const cleaned=window.cleanMd(reply);
     txt.innerHTML=window.highlightPattern(cleaned);
     txt.style.color="#111";
@@ -7220,18 +7220,14 @@ async function aiQuery(word,mode){
     var reqBody={system_instruction:{parts:[{text:prompt}]},contents:[{role:"user",parts:[{text:question}]}],generationConfig:{temperature:0}};
     const resp=await fetch("https://gemini-proxy.allenwu158.workers.dev",{
       method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({model:"gemini-2.0-flash-lite",payload:reqBody})
+      body:JSON.stringify({system:prompt,user:question})
     });
     const data=await resp.json();
     if(data.error){
-      if(data.error.code===429||data.error.code===503){
-        resultText.textContent="Google API 今日免費額度已用完，請明天再試。（已查詢過的單字不受影響）";
-      }else{
-        resultText.textContent="暫時無法連線，請稍後再試。";
-      }
+      resultText.textContent="暫時無法連線，請稍後再試。";
       resultText.style.color="#c00";return;
     }
-    const reply=data?.candidates?.[0]?.content?.parts?.[0]?.text||"無法取得回答";
+    const reply=data?.reply||"無法取得回答";
     const cleaned=cleanMd(reply);
     resultText.innerHTML=highlightPattern(cleaned);
     resultText.style.color="#111";
