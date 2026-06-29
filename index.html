@@ -6922,7 +6922,7 @@ async function studyQuery(word,mode,idx){
   const question=mode==="memory"?w+" 這個字怎麼記？":w+" 這個字在學測和全民英檢怎麼考？";
   try{
     const reqBody={system_instruction:{parts:[{text:prompt}]},contents:[{role:"user",parts:[{text:question}]}],generationConfig:{temperature:0}};
-    const resp=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key="+window.GEMINI_API_KEY,{
+    const resp=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key="+window.GEMINI_API_KEY,{
       method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(reqBody)
     });
     const data=await resp.json();
