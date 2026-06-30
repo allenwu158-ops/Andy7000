@@ -6768,15 +6768,16 @@ window.addSpeakButtons=function(container,text){
   if(!sentences.length)return;
   var html=container.innerHTML;
   sentences.forEach(function(s){
-    // 取句子前6個英文字和最後6個字元做寬鬆匹配，中間允許任意HTML標籤
     var words=s.replace(/[.!?]$/,"").split(/\s+/);
     if(words.length<3)return;
-    var head=words.slice(0,3).join("\\s+");
-    var tail=words.slice(-2).join("[\\s\\S]{0,60}");
-    var endPunct=s.match(/[.!?]$/)[0];
-    var re=new RegExp("("+head+"[\\s\\S]{0,200}?"+tail+"\\s*"+"\\"+endPunct+")(?!\\s*🔊)(?!\\s*<button)","");
+    var firstWord=words[0];
+    var lastWord=words[words.length-1];
+    var endPunct=(s.match(/[.!?]$/)||["."])[0].replace(".","\\.");
+    // 只用第一個字和最後一個字做錨點，中間允許任意 HTML
+    var re=new RegExp("("+firstWord+"[\\s\\S]{5,400}?"+lastWord+"\\s*"+endPunct+")(?!\\s*🔊)(?!\\s*<button)","");
     if(re.test(html)){
-      html=html.replace(re,'$1<button onclick="event.stopPropagation();window.speakText(\''+s.replace(/\\/g,"\\\\").replace(/'/g,"\\'")+'\')" title="朗讀例句" style="background:none;border:none;cursor:pointer;font-size:1rem;margin-left:4px;padding:0 2px;vertical-align:middle;opacity:0.7;">🔊</button>');
+      var btn='<button onclick="event.stopPropagation();window.speakText(\''+s.replace(/\\/g,"\\\\").replace(/'/g,"\\'")+'\');" title="朗讀例句" style="background:none;border:none;cursor:pointer;font-size:1rem;margin-left:4px;padding:0 2px;vertical-align:middle;opacity:0.7;">🔊</button>';
+      html=html.replace(re,"$1"+btn);
     }
   });
   container.innerHTML=html;
