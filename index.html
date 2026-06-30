@@ -173,6 +173,11 @@ window.loadCloudProgress = async (uid) => {
           S.studied[word] = data.studied[word];
         });
       }
+      if (data.flash) {
+        Object.keys(data.flash).forEach(word => {
+          S.flash[word] = data.flash[word];
+        });
+      }
       render();
     }
   } catch(e) { console.error("載入進度失敗", e); }
@@ -189,6 +194,19 @@ window.saveStudiedToCloud = async (word) => {
       updatedAt: new Date().toISOString()
     }, { merge: true });
   } catch(e) { console.error("學習進度儲存失敗", e); }
+};
+
+// 儲存閃卡標記到雲端
+window.saveFlashToCloud = async (word) => {
+  if (!window.fbUser) return;
+  try {
+    const uid = window.fbUser.uid;
+    const ref = doc(db, "users", uid);
+    await setDoc(ref, {
+      flash: { [word]: S.flash[word] },
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  } catch(e) { console.error("閃卡儲存失敗", e); }
 };
 
 // 儲存單字作答結果到雲端
@@ -6693,7 +6711,7 @@ const WORLDS=[
 ];
 const COMBO_PRAISE=[{min:2,t:"不錯喔！",s:"1rem"},{min:3,t:"太強了！",s:"1.1rem"},{min:5,t:"勢如破竹！",s:"1.2rem"},{min:7,t:"無人能擋！",s:"1.3rem"},{min:10,t:"天下無敵！",s:"1.5rem"},{min:15,t:"你是神嗎？！",s:"1.7rem"},{min:20,t:"前無古人！！",s:"1.9rem"}];
 
-let S={page:"home",lv:null,wk:null,wxp:{},combo:0,ws:{},cQ:null,sel:null,show:false,ss:{c:0,w:0},qn:0,weakMode:false,studied:{}};
+let S={page:"home",lv:null,wk:null,wxp:{},combo:0,ws:{},cQ:null,sel:null,show:false,ss:{c:0,w:0},qn:0,weakMode:false,studied:{},flash:{},fcQueue:[],fcIdx:0,fcFlip:false,fcRound:{known:0,unknown:0},fcHist:[],fcListFilter:"all"};
 function wkKey(){return S.lv+"_"+S.wk;}
 function getWkXp(){return S.wxp[wkKey()]||0;}
 function addWkXp(n){S.wxp[wkKey()]=(S.wxp[wkKey()]||0)+n;}
@@ -6889,6 +6907,177 @@ window.addEventListener("popstate",function(e){
   }catch(err){}
   _navSyncing=false;
 });
+
+
+// === 閃卡系統核心函式 ===
+function getFlashState(word){return S.flash[word]||{known:null};}
+function flashMarkKnown(word){S.flash[word]={known:true};if(window.saveFlashToCloud)window.saveFlashToCloud(word);}
+function flashMarkUnknown(word){S.flash[word]={known:false};if(window.saveFlashToCloud)window.saveFlashToCloud(word);}
+function buildFlashQueue(words){return words.slice().sort(()=>Math.random()-.5);}
+function flashStats(words){let known=0,learning=0,fresh=0;words.forEach(w=>{const st=getFlashState(w.w);if(st.known===true)known++;else if(st.known===false)learning++;else fresh++;});return {known,learning,fresh,total:words.length};}
+
+function goFlashList(lv){S.page="flashList";S.lv=lv;S.wk=null;render();}
+// 取得目前單元的所有字
+function fcSectionWords(){const words=wordsForLv(S.lv);const start=S.wk*SEC_SIZE;return words.slice(start,start+SEC_SIZE);}
+// 依篩選模式建立佇列：all=整個單元，no=只挑標「不會」的字
+function buildFlashQueueByFilter(filter){
+  const sec=fcSectionWords();
+  let pool=sec;
+  if(filter==="no")pool=sec.filter(w=>getFlashState(w.w).known===false);
+  else if(filter==="new")pool=sec.filter(w=>getFlashState(w.w).known===null);
+  return pool.slice().sort(()=>Math.random()-.5);
+}
+// 切換篩選：重建佇列、從第一張重新開始（上面閃卡 + 下面列表一起連動）
+function flashSetFilter(filter){
+  if(filter==="no"||filter==="new"){
+    const sec=fcSectionWords();
+    const pool=filter==="no"?sec.filter(w=>getFlashState(w.w).known===false):sec.filter(w=>getFlashState(w.w).known===null);
+    if(!pool.length){
+      if(window.fcShowNoEmpty)window.fcShowNoEmpty(filter);
+      return;
+    }
+  }
+  S.page="flash"; // 確保回到卡片頁（可能從完成頁的「只練不會」進來）
+  S.fcListFilter=filter;
+  S.fcQueue=buildFlashQueueByFilter(filter);
+  S.fcIdx=0;S.fcFlip=false;S.fcHist=[];
+  // 注意：fcRound（本輪會/不會計數）重置，因為這是新的一輪
+  S.fcRound={known:0,unknown:0};
+  render();
+  window.scrollTo(0,0);
+  setTimeout(()=>{const c=S.fcQueue[0];if(c)speak(c.w);},300);
+}
+function startFlash(lv,wk){
+  try{gC();}catch(e){}
+  S.page="flash";S.lv=lv;S.wk=wk;
+  S.fcListFilter="all";
+  const sec=fcSectionWords();
+  if(!sec.length)return;
+  S.fcQueue=buildFlashQueueByFilter("all");
+  S.fcIdx=0;S.fcFlip=false;S.fcRound={known:0,unknown:0};S.fcHist=[];
+  render();
+  window.scrollTo(0,0);
+  setTimeout(()=>{const c=S.fcQueue[0];if(c)speak(c.w);},300);
+}
+function flashFlip(){
+  S.fcFlip=!S.fcFlip;
+  const flipper=document.getElementById("fc-flipper");
+  if(flipper){
+    // 直接操作 DOM 播放 3D 翻轉動畫（render 會重建 DOM 打斷動畫，故不在此 render）
+    flipper.style.transform=`rotateY(${S.fcFlip?'180deg':'0deg'})`;
+    const cb=document.getElementById("fc-ctrl-back"),cf=document.getElementById("fc-ctrl-front");
+    if(cb)cb.style.display=S.fcFlip?"flex":"none";
+    if(cf)cf.style.display=S.fcFlip?"none":"flex";
+  }else{render();}
+}
+function flashSwipeOut(known){
+  const cardEl=document.getElementById("fc-card");
+  if(!cardEl){flashAnswer(known);return;}
+  // 飛出動畫：右=會，左=不會
+  cardEl.style.transition="transform .35s ease, opacity .35s ease";
+  const dir=known?1:-1;
+  cardEl.style.transform=`translateX(${dir*600}px) rotate(${dir*30}deg)`;
+  cardEl.style.opacity="0";
+  // 計數圈跳動回饋
+  const cntEl=document.getElementById(known?"fc-cnt-known":"fc-cnt-unknown");
+  if(cntEl){cntEl.style.transform="scale(1.3)";setTimeout(()=>{if(cntEl)cntEl.style.transform="scale(1)";},200);}
+  setTimeout(()=>{flashAnswer(known);},340);
+}
+function flashAnswer(known){
+  const card=S.fcQueue[S.fcIdx];if(!card){S.fcBusy=false;return;}
+  // 記錄這一步，供復原使用（保存標記前的閃卡狀態快照）
+  S.fcHist.push({word:card.w,known:known,prevFlash:S.flash[card.w]?JSON.parse(JSON.stringify(S.flash[card.w])):null});
+  if(known){flashMarkKnown(card.w);S.fcRound.known++;}
+  else{flashMarkUnknown(card.w);S.fcRound.unknown++;}
+  // 即時同步下面清單該字的標籤與統計（WordBranch 式連動）
+  if(window.flashSyncList)window.flashSyncList(card.w);
+  S.fcBusy=false;
+  flashNext();
+}
+// 底部按鈕：標記會/不會（更新計數、連動列表），然後前進到下一張；最後一張則停著
+function flashMark(known){
+  if(S.fcBusy)return;
+  const card=S.fcQueue[S.fcIdx];if(!card)return;
+  S.fcHist.push({word:card.w,known:known,prevFlash:S.flash[card.w]?JSON.parse(JSON.stringify(S.flash[card.w])):null,filter:S.fcListFilter,removedIdx:null});
+  if(known)flashMarkKnown(card.w);else flashMarkUnknown(card.w);
+  // 「不會」模式下標「會」→ 這張不再屬於不會系列，從佇列移除
+  // 「還沒學」模式下標任何（會或不會）→ 這張不再是還沒學，從佇列移除
+  const shouldRemove=(S.fcListFilter==="no"&&known)||(S.fcListFilter==="new");
+  if(shouldRemove){
+    S.fcHist[S.fcHist.length-1].removedIdx=S.fcIdx; // 記住移除位置供復原
+    S.fcQueue.splice(S.fcIdx,1);
+    recalcFcRound();
+    if(window.flashSyncList)window.flashSyncList(card.w);
+    if(S.fcQueue.length===0){
+      // 全部攻克：切回全部模式
+      flashSetFilter("all");
+      return;
+    }
+    // 若移除後 fcIdx 超出範圍，退到最後一張
+    if(S.fcIdx>=S.fcQueue.length)S.fcIdx=S.fcQueue.length-1;
+    S.fcFlip=false;
+    const sy=window.scrollY||0;render();if(sy>0)window.scrollTo(0,sy);
+    const c=S.fcQueue[S.fcIdx];if(c)setTimeout(()=>speak(c.w),200);
+    return;
+  }
+  recalcFcRound();
+  if(window.flashSyncList)window.flashSyncList(card.w);
+  if(S.fcIdx+1<S.fcQueue.length){S.fcBusy=true;flashGo(1);}
+  else{const sy=window.scrollY||0;render();if(sy>0)window.scrollTo(0,sy);}
+}
+// 依目前佇列裡每個字的實際狀態重算本輪計數（避免重複標記同一張造成計數虛增）
+function recalcFcRound(){
+  let k=0,u=0;
+  S.fcQueue.forEach(c=>{const st=getFlashState(c.w);if(st.known===true)k++;else if(st.known===false)u++;});
+  S.fcRound={known:k,unknown:u};
+}
+function flashUndo(){
+  if(!S.fcHist.length)return;
+  const last=S.fcHist.pop();
+  // 撤銷計數
+  if(last.known)S.fcRound.known--;else S.fcRound.unknown--;
+  // 還原該字的閃卡狀態
+  if(last.prevFlash===null){delete S.flash[last.word];}
+  else{S.flash[last.word]=last.prevFlash;}
+  if(window.saveFlashToCloud)window.saveFlashToCloud(last.word);
+  // 退回上一張，並顯示為已翻面（讓使用者看到剛才那張的內容重新決定）
+  S.fcIdx=Math.max(0,S.fcIdx-1);S.fcFlip=true;
+  render();
+}
+function flashNext(){
+  S.fcIdx++;S.fcFlip=false;
+  if(S.fcIdx>=S.fcQueue.length){S.page="flashDone";render();window.scrollTo(0,0);return;}
+  const sy=window.scrollY||0; // 記住目前捲動位置
+  render();
+  // render 重建畫面後，恢復原本的捲動位置（讓使用者停在原地看清單）
+  if(sy>0)window.scrollTo(0,sy);
+  const c=S.fcQueue[S.fcIdx];if(c)setTimeout(()=>speak(c.w),250);
+}
+// 純瀏覽：前後翻卡（不分類、不影響會/不會計數）
+function flashGo(dir){
+  // dir=1 看下一張，dir=-1 看上一張
+  const ni=S.fcIdx+dir;
+  if(ni<0||ni>=S.fcQueue.length){
+    // 已到邊界：彈回原位，不動
+    const cardEl=document.getElementById("fc-card");
+    if(cardEl){cardEl.style.transition="transform .3s ease";cardEl.style.transform="translateX(0) rotate(0)";}
+    S.fcBusy=false;return;
+  }
+  const cardEl=document.getElementById("fc-card");
+  if(!cardEl){S.fcIdx=ni;S.fcFlip=false;render();S.fcBusy=false;return;}
+  // 飛出動畫：往下一張時卡片往左飛、往上一張時往右飛
+  cardEl.style.transition="transform .28s ease, opacity .28s ease";
+  cardEl.style.transform=`translateX(${dir>0?-600:600}px)`;
+  cardEl.style.opacity="0";
+  setTimeout(()=>{
+    S.fcIdx=ni;S.fcFlip=false;
+    const sy=window.scrollY||0;
+    render();
+    if(sy>0)window.scrollTo(0,sy);
+    S.fcBusy=false;
+    const c=S.fcQueue[S.fcIdx];if(c)setTimeout(()=>speak(c.w),200);
+  },280);
+}
 
 function goHome(){S.page="home";S.lv=null;S.wk=null;S.weakMode=false;render();}
 function goWorldMenu(lv){S.page="mode";S.lv=lv;S.wk=null;render();}
@@ -7090,9 +7279,276 @@ else if(S.page==="mode"){
 clearHomeBg();const wld=getWld(S.lv);document.body.style.background="#050510";document.body.style.color="#fff";
 const words=wordsForLv(S.lv);const numU=Math.ceil(words.length/SEC_SIZE);
 app.innerHTML=`<div class="header" style="background:rgba(10,10,25,0.9)"><button onclick="goHome()" style="background:none;color:${wld.homeAccent};font-size:1rem;font-weight:600;padding:8px">← 返回</button></div><div class="container"><div style="text-align:center;margin:20px 0 32px"><div style="font-size:3rem;margin-bottom:8px">${wld.icon}</div><div style="font-size:1.5rem;font-weight:900;color:#fff">${wld.name}</div><div style="font-size:0.9rem;color:rgba(255,255,255,0.45);margin-top:6px">${words.length} 個單字 · ${numU} 個單元</div></div>
+<div class="home-card" onclick="goFlashList(${S.lv})" style="background:linear-gradient(160deg,rgba(245,158,11,0.22),rgba(5,5,16,0.85));margin-bottom:16px;animation-delay:0.05s"><div class="hc-glow" style="background:#F59E0B"></div><div class="hc-hl"></div><span style="font-size:2.6rem;display:block;margin-bottom:10px">🃏</span><div style="font-size:1.45rem;font-weight:800;color:#fff;margin-bottom:3px">閃卡</div><div style="font-size:0.9rem;font-weight:600;color:#F59E0B">快速翻卡記憶，系統幫你安排複習節奏</div></div>
 <div class="home-card" onclick="goStudyList(${S.lv})" style="background:linear-gradient(160deg,rgba(99,102,241,0.22),rgba(5,5,16,0.85));margin-bottom:16px;animation-delay:0.1s"><div class="hc-glow" style="background:#818CF8"></div><div class="hc-hl"></div><span style="font-size:2.6rem;display:block;margin-bottom:10px">📖</span><div style="font-size:1.45rem;font-weight:800;color:#fff;margin-bottom:3px">學習版</div><div style="font-size:0.9rem;font-weight:600;color:#818CF8">先認識單字，AI 教你怎麼記、考試怎麼考</div></div>
 <div class="home-card" onclick="goLevel(${S.lv})" style="background:${wld.homeBg};animation-delay:0.2s"><div class="hc-glow" style="background:${wld.homeGlow}"></div><div class="hc-hl"></div><span style="font-size:2.6rem;display:block;margin-bottom:10px">⚔️</span><div style="font-size:1.45rem;font-weight:800;color:#fff;margin-bottom:3px">挑戰版</div><div style="font-size:0.9rem;font-weight:600;color:${wld.homeAccent}">闖關答題，測試你的精熟程度</div></div>
 </div>`;}
+
+// === FLASH LIST 閃卡單元列表 ===
+else if(S.page==="flashList"){
+clearHomeBg();const wld=getWld(S.lv),words=wordsForLv(S.lv),dk=wld.dark;
+const numU=Math.ceil(words.length/SEC_SIZE);
+document.body.style.background=wld.bg;document.body.style.color=dk?"#E2E8F0":"#1C1C1E";
+const acc="#F59E0B";
+let fCards="";
+for(let i=0;i<numU;i++){
+  const start=i*SEC_SIZE,end=Math.min(start+SEC_SIZE,words.length);
+  const sec=words.slice(start,end);
+  const st=flashStats(sec);
+  const pct=st.total?Math.round(st.known/st.total*100):0;
+  const preview=sec.slice(0,3).map(x=>x.w).join("，");
+  fCards+=`<div class="week-card flashunit" data-wk="${i}" style="background:${wld.cardBg};border:1px solid ${wld.cardBorder};cursor:pointer"><div style="flex:1"><div style="font-size:1.1rem;font-weight:700;color:${dk?wld.txtCol:acc}">單元${i+1}</div><div style="font-size:0.82rem;color:${dk?wld.dimCol:'#8E8E93'};margin-top:4px">會 ${st.known} · 不會 ${st.learning} · 還沒學 ${st.fresh}</div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:52px"><div style="font-size:0.9rem;font-weight:700;color:${pct===100?'#34C759':acc}">${pct===100?'✓ 全會了':pct+'%'}</div><div style="width:48px;height:5px;border-radius:3px;background:${dk?'rgba(255,255,255,0.1)':'#E5E5EA'}"><div style="width:${pct}%;height:100%;border-radius:3px;background:${pct===100?'#34C759':acc};transition:width .3s"></div></div></div></div>`;
+}
+const totalSt=flashStats(words);
+const totalPct=totalSt.total?Math.round(totalSt.known/totalSt.total*100):0;
+app.innerHTML=`<div class="header" style="background:${wld.hdr}"><button id="fl-back" style="background:none;color:${acc};font-size:1rem;font-weight:600;padding:8px">← 返回</button><div style="font-size:0.8rem;font-weight:700;color:${acc}">🃏 閃卡</div></div><div class="container"><div style="text-align:center;margin-bottom:20px"><div style="font-size:2.8rem;margin-bottom:6px">${wld.icon}</div><div style="font-size:1.4rem;font-weight:900;color:${dk?wld.txtCol:acc}">${wld.name}</div></div><div style="margin-bottom:20px"><div style="display:flex;justify-content:space-between;font-size:0.72rem;color:${dk?wld.dimCol:'#8E8E93'};margin-bottom:5px"><span style="font-size:0.88rem">整體會的比例</span><span style="font-size:0.88rem">${totalSt.known}/${totalSt.total}（${totalPct}%）</span></div><div class="progress-bg" style="height:12px;border-radius:6px;background:${dk?'rgba(255,255,255,0.1)':'#E5E5EA'}"><div class="progress-fill" style="width:${totalPct}%;background:${acc};border-radius:6px"></div></div></div><div style="font-size:0.88rem;color:${dk?wld.dimCol:'#8E8E93'};font-weight:600;margin-bottom:12px">選擇單元開始閃卡</div>${fCards}</div>`;
+const fb=document.getElementById("fl-back");if(fb)fb.addEventListener("click",()=>goWorldMenu(S.lv));
+document.querySelectorAll(".flashunit").forEach(el=>{el.addEventListener("click",()=>{startFlash(S.lv,parseInt(el.getAttribute("data-wk")));});});
+}
+
+// === FLASH 閃卡學習畫面 ===
+else if(S.page==="flash"){
+clearHomeBg();const wld=getWld(S.lv),dk=wld.dark;const acc="#F59E0B";
+document.body.style.background=wld.bg;document.body.style.color=dk?"#E2E8F0":"#1C1C1E";
+const card=S.fcQueue[S.fcIdx];
+if(!card){S.page="flashList";render();}
+else{
+const total=S.fcQueue.length;const cur=S.fcIdx+1;
+const progPct=Math.round(cur/total*100);
+const frontTxt=card.w;const backTxt=card.m;
+const flipped=S.fcFlip;
+const ORANGE="#FF9F0A",GREEN="#34C759";
+const canUndo=S.fcHist.length>0;
+// 本單元的統計與單字列表資料
+const fcWords=wordsForLv(S.lv).slice(S.wk*SEC_SIZE,S.wk*SEC_SIZE+SEC_SIZE);
+const fcSt=flashStats(fcWords);
+const fcMasteredPct=fcSt.total?Math.round(fcSt.known/fcSt.total*100):0;
+const BLUE="#818CF8";
+function fcWordStatus(w){const st=getFlashState(w);if(st.known===true)return {label:"會",color:GREEN};if(st.known===false)return {label:"不會",color:ORANGE};return {label:"還沒學",color:dk?wld.dimCol:"#8E8E93"};}
+let fcListHTML="";
+fcWords.forEach((w,i)=>{
+  const stt=fcWordStatus(w.w);
+  const stState=getFlashState(w.w);
+  const knownVal=stState.known===true?"yes":stState.known===false?"no":"none";
+  fcListHTML+=`<div class="fc-list-row" data-w="${w.w}" data-known="${knownVal}" style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:${wld.cardBg};border:1px solid ${wld.cardBorder};border-radius:14px;margin-bottom:8px">
+    <button class="fc-list-speak" data-w="${w.w}" style="background:${dk?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.04)'};border:none;border-radius:50%;width:38px;height:38px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.95rem">🔊</button>
+    <div style="flex:1;min-width:0"><div style="font-size:1.05rem;font-weight:700;color:${dk?'#fff':'#1C1C1E'}">${w.w}</div><div style="font-size:0.85rem;color:${dk?wld.dimCol:'#8E8E93'};margin-top:2px">${w.m}</div></div>
+    <div class="fc-list-tag" data-w="${w.w}" style="font-size:0.72rem;font-weight:700;color:${stt.color};flex-shrink:0;padding:3px 10px;border-radius:12px;border:1px solid ${stt.color}40">${stt.label}</div>
+  </div>`;
+});
+app.innerHTML=`<div class="header" style="background:${wld.hdr}"><button id="fc-back" style="background:none;color:${dk?'#E2E8F0':'#1C1C1E'};font-size:1.4rem;font-weight:400;padding:8px;line-height:1">✕</button><div style="text-align:center"><div style="font-size:0.7rem;font-weight:700;color:${S.fcListFilter==="no"?ORANGE:S.fcListFilter==="new"?BLUE:acc};letter-spacing:1px;margin-bottom:2px">${S.fcListFilter==="no"?"不會":S.fcListFilter==="new"?"還沒學":"全部"}</div><div style="font-size:0.95rem;font-weight:700;color:${dk?'#fff':'#1C1C1E'}">${cur} / ${total}</div></div><div style="width:40px"></div></div>
+<div class="container" style="display:flex;flex-direction:column;padding-top:4px">
+<div style="height:4px;border-radius:3px;background:${dk?'rgba(255,255,255,0.1)':'#E5E5EA'};margin-bottom:4px"><div style="width:${progPct}%;height:100%;border-radius:3px;background:${acc};transition:width .3s"></div></div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+  <div style="width:44px;height:44px;border-radius:50%;border:2.5px solid ${ORANGE};display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:800;color:${ORANGE};transition:transform .2s" id="fc-cnt-unknown">${S.fcRound.unknown}</div>
+  <div style="width:44px;height:44px;border-radius:50%;border:2.5px solid ${GREEN};display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:800;color:${GREEN};transition:transform .2s" id="fc-cnt-known">${S.fcRound.known}</div>
+</div>
+<div id="fc-stage" style="position:relative;height:34vh;min-height:180px;margin-bottom:6px">
+  <div id="fc-card" style="position:absolute;inset:0;display:flex;align-items:stretch;justify-content:center;cursor:grab;touch-action:pan-y;will-change:transform">
+    <div style="position:relative;width:100%;max-width:380px;perspective:1200px">
+      <button id="fc-speak" style="position:absolute;bottom:18px;right:18px;background:${dk?'rgba(255,255,255,0.12)':'rgba(255,255,255,0.9)'};border:none;border-radius:50%;width:42px;height:42px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1.1rem;z-index:5;box-shadow:0 2px 8px rgba(0,0,0,0.15)">🔊</button>
+      <div id="fc-tag-known" style="position:absolute;top:20px;right:20px;border:3px solid ${GREEN};color:${GREEN};border-radius:10px;padding:4px 12px;font-size:1rem;font-weight:800;transform:rotate(12deg);opacity:0;transition:opacity .1s;z-index:5">會</div>
+      <div id="fc-tag-unknown" style="position:absolute;top:20px;left:64px;border:3px solid ${ORANGE};color:${ORANGE};border-radius:10px;padding:4px 12px;font-size:1rem;font-weight:800;transform:rotate(-12deg);opacity:0;transition:opacity .1s;z-index:5">不會</div>
+      <div id="fc-flipper" style="position:relative;width:100%;height:34vh;min-height:180px;transform-style:preserve-3d;transition:transform .5s;transform:rotateY(${flipped?'180deg':'0deg'})">
+        <div style="position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:24px;background:${wld.cardBg};border:2px solid ${wld.cardBorder};display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.18)">
+          <div style="font-size:2.4rem;font-weight:900;color:${dk?'#fff':'#1C1C1E'};text-align:center">${frontTxt}</div>
+        </div>
+        <div style="position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:24px;background:${dk?'rgba(245,158,11,0.1)':'#FFF7E6'};border:2px solid ${acc};display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.18);transform:rotateY(180deg)">
+          <div style="font-size:0.68rem;color:${acc};text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;font-weight:600">中文意思</div>
+          <div style="font-size:1.9rem;font-weight:900;color:${dk?'#fff':'#1C1C1E'};text-align:center;line-height:1.4">${backTxt}</div>
+          <div style="font-size:0.95rem;color:${dk?wld.dimCol:'#8E8E93'};margin-top:14px">${frontTxt}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div style="padding:4px 0 12px">
+  <div id="fc-ctrl-back" style="display:${flipped?'flex':'none'};gap:12px"><button id="fc-unknown" style="flex:1;background:${dk?'rgba(255,159,10,0.12)':'#fff'};color:${ORANGE};border:2px solid ${ORANGE};border-radius:14px;padding:14px;font-size:1rem;font-weight:700;cursor:pointer">不會</button><button id="fc-known" style="flex:1;background:${GREEN};color:#fff;border:none;border-radius:14px;padding:14px;font-size:1rem;font-weight:700;cursor:pointer">會</button></div>
+  <div id="fc-ctrl-front" style="display:${flipped?'none':'flex'};align-items:center;justify-content:space-between">
+    <button id="fc-undo" style="background:none;border:none;cursor:${canUndo?'pointer':'default'};opacity:${canUndo?'1':'0.25'};padding:10px;font-size:1.4rem;color:${dk?'#E2E8F0':'#1C1C1E'}">↩</button>
+    <div style="font-size:0.85rem;color:${dk?wld.dimCol:'#8E8E93'};font-weight:600">點卡片翻開 · 左右滑動換卡</div>
+    <div style="width:44px"></div>
+  </div>
+</div>
+<div style="border-top:1px solid ${wld.cardBorder};margin:8px 0 20px;padding-top:24px">
+  <div style="font-size:1.05rem;font-weight:800;color:${dk?'#fff':'#1C1C1E'};margin-bottom:16px">本單元進度</div>
+  <div style="display:flex;justify-content:space-around;margin-bottom:14px">
+    <div style="text-align:center"><div id="fc-stat-known" style="font-size:1.7rem;font-weight:900;color:${GREEN}">${fcSt.known}</div><div style="font-size:0.72rem;color:${dk?wld.dimCol:'#8E8E93'};margin-top:2px">會</div></div>
+    <div style="text-align:center"><div id="fc-stat-learning" style="font-size:1.7rem;font-weight:900;color:${ORANGE}">${fcSt.learning}</div><div style="font-size:0.72rem;color:${dk?wld.dimCol:'#8E8E93'};margin-top:2px">不會</div></div>
+    <div style="text-align:center"><div id="fc-stat-fresh" style="font-size:1.7rem;font-weight:900;color:${BLUE}">${fcSt.fresh}</div><div style="font-size:0.72rem;color:${dk?wld.dimCol:'#8E8E93'};margin-top:2px">還沒學</div></div>
+  </div>
+  <div style="height:10px;border-radius:5px;background:${dk?'rgba(255,255,255,0.1)':'#E5E5EA'};overflow:hidden;display:flex">
+    <div id="fc-bar-known" style="width:${fcSt.total?fcSt.known/fcSt.total*100:0}%;background:${GREEN};height:100%;transition:width .3s"></div>
+    <div id="fc-bar-learning" style="width:${fcSt.total?fcSt.learning/fcSt.total*100:0}%;background:${ORANGE};height:100%;transition:width .3s"></div>
+  </div>
+  <div id="fc-pct-text" style="font-size:0.78rem;color:${dk?wld.dimCol:'#8E8E93'};margin-top:8px;text-align:center">會 ${fcMasteredPct}%</div>
+</div>
+<div style="margin-bottom:32px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <div style="font-size:1.05rem;font-weight:800;color:${dk?'#fff':'#1C1C1E'}">單字列表</div>
+    <div style="display:flex;gap:6px;background:${dk?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.04)'};border-radius:12px;padding:3px">
+      <button id="fc-filter-all" style="border:none;border-radius:9px;padding:7px 14px;font-size:0.82rem;font-weight:700;cursor:pointer;background:${acc};color:#fff">全部</button>
+      <button id="fc-filter-no" style="border:none;border-radius:9px;padding:7px 14px;font-size:0.82rem;font-weight:700;cursor:pointer;background:transparent;color:${dk?wld.dimCol:'#8E8E93'}">不會</button>
+      <button id="fc-filter-new" style="border:none;border-radius:9px;padding:7px 14px;font-size:0.82rem;font-weight:700;cursor:pointer;background:transparent;color:${dk?wld.dimCol:'#8E8E93'}">還沒學</button>
+    </div>
+  </div>
+  <div id="fc-list-wrap">${fcListHTML}</div>
+  <div id="fc-list-empty" style="display:none;text-align:center;padding:32px 16px;color:${dk?wld.dimCol:'#8E8E93'};font-size:0.9rem">目前沒有標記「不會」的字 🎉</div>
+</div>
+</div>`;
+// 真實 DOM 綁定（手機穩定）
+const back=document.getElementById("fc-back");if(back)back.addEventListener("click",()=>{S.page="flashList";render();});
+const cardEl=document.getElementById("fc-card");
+const speakBtn=document.getElementById("fc-speak");
+const tagKnown=document.getElementById("fc-tag-known");
+const tagUnknown=document.getElementById("fc-tag-unknown");
+if(speakBtn)speakBtn.addEventListener("click",(e)=>{e.stopPropagation();e.preventDefault();speak(card.w);});
+if(speakBtn)speakBtn.addEventListener("touchstart",(e)=>{e.stopPropagation();},{passive:true});
+const knownBtn=document.getElementById("fc-known");if(knownBtn)knownBtn.addEventListener("click",()=>flashMark(true));
+const unknownBtn=document.getElementById("fc-unknown");if(unknownBtn)unknownBtn.addEventListener("click",()=>flashMark(false));
+const undoBtn=document.getElementById("fc-undo");if(undoBtn&&canUndo)undoBtn.addEventListener("click",()=>flashUndo());
+// 單字列表發音按鈕
+document.querySelectorAll(".fc-list-speak").forEach(b=>{b.addEventListener("click",(e)=>{e.stopPropagation();e.preventDefault();speak(b.getAttribute("data-w"));});});
+// 列表篩選顯示（依 S.fcListFilter）
+function applyFcFilter(){
+  const flt=S.fcListFilter||"all";
+  const rows=document.querySelectorAll(".fc-list-row");
+  let shown=0;
+  rows.forEach(r=>{
+    const k=r.getAttribute("data-known");
+    const show=flt==="all"?true:flt==="no"?(k==="no"):(k==="none");
+    r.style.display=show?"flex":"none";
+    if(show)shown++;
+  });
+  const empty=document.getElementById("fc-list-empty");
+  if(empty){
+    if(flt==="no"&&shown===0){empty.style.display="block";empty.textContent="目前沒有標記「不會」的字 🎉";}
+    else if(flt==="new"&&shown===0){empty.style.display="block";empty.textContent="所有的字都學過了 🎉";}
+    else{empty.style.display="none";}
+  }
+  // 按鈕高亮切換
+  const bAll=document.getElementById("fc-filter-all"),bNo=document.getElementById("fc-filter-no"),bNew=document.getElementById("fc-filter-new");
+  if(bAll){bAll.style.background=flt==="all"?acc:"transparent";bAll.style.color=flt==="all"?"#fff":(dk?wld.dimCol:"#8E8E93");}
+  if(bNo){bNo.style.background=flt==="no"?ORANGE:"transparent";bNo.style.color=flt==="no"?"#fff":(dk?wld.dimCol:"#8E8E93");}
+  if(bNew){bNew.style.background=flt==="new"?BLUE:"transparent";bNew.style.color=flt==="new"?"#fff":(dk?wld.dimCol:"#8E8E93");}
+}
+const bFilterAll=document.getElementById("fc-filter-all"),bFilterNo=document.getElementById("fc-filter-no"),bFilterNew=document.getElementById("fc-filter-new");
+if(bFilterAll)bFilterAll.addEventListener("click",()=>{flashSetFilter("all");});
+if(bFilterNo)bFilterNo.addEventListener("click",()=>{flashSetFilter("no");});
+if(bFilterNew)bFilterNew.addEventListener("click",()=>{flashSetFilter("new");});
+applyFcFilter();
+// 沒有該類字時的提示
+window.fcShowNoEmpty=function(filter){
+  const btn=document.getElementById(filter==="new"?"fc-filter-new":"fc-filter-no");
+  const msg=filter==="new"?"所有字都學過了 🎉":"沒有不會的字 🎉";
+  if(btn){const orig=btn.textContent;btn.textContent=msg;setTimeout(()=>{if(btn)btn.textContent=orig;},1600);}
+};
+// 即時同步：標記一個字時，下面清單該字標籤即時變色 + 上方統計即時更新（不重畫整頁）
+window.flashSyncList=function(word){
+  // 更新該字的清單標籤
+  const tag=document.querySelector(`.fc-list-tag[data-w="${(word||"").replace(/"/g,'')}"]`);
+  if(tag){const stt=fcWordStatus(word);tag.textContent=stt.label;tag.style.color=stt.color;tag.style.borderColor=stt.color+"40";}
+  // 更新該列的 data-known（供篩選用）
+  const row=document.querySelector(`.fc-list-row[data-w="${(word||"").replace(/"/g,'')}"]`);
+  if(row){const stt2=getFlashState(word);row.setAttribute("data-known",stt2.known===true?"yes":stt2.known===false?"no":"none");}
+  // 重新計算統計並更新數字、進度條、百分比
+  const st=flashStats(fcWords);
+  const kE=document.getElementById("fc-stat-known"),lE=document.getElementById("fc-stat-learning"),fE=document.getElementById("fc-stat-fresh");
+  if(kE)kE.textContent=st.known;if(lE)lE.textContent=st.learning;if(fE)fE.textContent=st.fresh;
+  const bk=document.getElementById("fc-bar-known"),bl=document.getElementById("fc-bar-learning"),pt=document.getElementById("fc-pct-text");
+  if(bk)bk.style.width=(st.total?st.known/st.total*100:0)+"%";
+  if(bl)bl.style.width=(st.total?st.learning/st.total*100:0)+"%";
+  if(pt)pt.textContent="會 "+(st.total?Math.round(st.known/st.total*100):0)+"%";
+  // 若正在「不會」篩選模式，重新套用（讓剛標記的字即時進出列表）
+  if(S.fcListFilter==="no"&&typeof applyFcFilter==="function")applyFcFilter();
+};
+
+// ===== 滑動手勢 =====
+if(cardEl){
+  let dragging=false,startX=0,startY=0,dx=0,dy=0,moved=false,axis=null;
+  const THRESHOLD=80; // 觸發判定的水平位移
+  const TAP_MAX=10;   // 視為點擊（翻面）的最大位移
+  const LOCK=12;      // 超過此位移就鎖定主軸方向
+  function onStart(x,y){dragging=true;startX=x;startY=y;dx=0;dy=0;moved=false;axis=null;cardEl.style.transition="none";}
+  function onMove(x,y){
+    if(!dragging)return;
+    dx=x-startX;dy=y-startY;
+    // 一旦移動超過鎖定門檻，判定主軸：水平=翻卡，垂直=捲頁
+    if(axis===null&&(Math.abs(dx)>LOCK||Math.abs(dy)>LOCK)){
+      axis=Math.abs(dx)>Math.abs(dy)?"x":"y";
+    }
+    if(Math.abs(dx)>TAP_MAX||Math.abs(dy)>TAP_MAX)moved=true;
+    // 垂直主軸：放手給瀏覽器捲動，完全不動卡片
+    if(axis==="y")return;
+    if(axis!=="x")return;
+    cardEl.style.transform=`translateX(${dx}px)`;
+  }
+  function onEnd(){
+    if(!dragging)return;dragging=false;
+    // 垂直捲動，不做任何判定
+    if(axis==="y"){return;}
+    if(!moved){
+      // 視為點擊：翻面
+      cardEl.style.transform="";
+      flashFlip();return;
+    }
+    if(axis==="x"&&Math.abs(dx)>THRESHOLD){
+      // 達標：前後翻卡瀏覽（往左滑=下一張，往右滑=上一張）
+      if(S.fcBusy)return;S.fcBusy=true;
+      flashGo(dx<0?1:-1);
+    }else{
+      // 未達標：彈回原位
+      cardEl.style.transition="transform .3s ease";
+      cardEl.style.transform="translateX(0)";
+    }
+  }
+  cardEl.addEventListener("touchstart",(e)=>{if(e.target.closest("#fc-speak"))return;onStart(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
+  cardEl.addEventListener("touchmove",(e)=>{onMove(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
+  cardEl.addEventListener("touchend",()=>{onEnd();});
+  // 桌機滑鼠也支援（拖曳期間才綁 window，結束即移除，避免累積）
+  function winMove(e){if(dragging)onMove(e.clientX,e.clientY);}
+  function winUp(){if(dragging){onEnd();}window.removeEventListener("mousemove",winMove);window.removeEventListener("mouseup",winUp);}
+  cardEl.addEventListener("mousedown",(e)=>{if(e.target.closest("#fc-speak"))return;onStart(e.clientX,e.clientY);window.addEventListener("mousemove",winMove);window.addEventListener("mouseup",winUp);});
+}
+}
+}
+
+// === FLASH DONE 閃卡完成畫面 ===
+else if(S.page==="flashDone"){
+clearHomeBg();const wld=getWld(S.lv),dk=wld.dark;const acc="#F59E0B";
+document.body.style.background=wld.bg;document.body.style.color=dk?"#E2E8F0":"#1C1C1E";
+const words=wordsForLv(S.lv);const start=S.wk*SEC_SIZE;const sec=words.slice(start,start+SEC_SIZE);
+const st=flashStats(sec);const pct=st.total?Math.round(st.known/st.total*100):0;
+const noCount=sec.filter(w=>getFlashState(w.w).known===false).length;
+app.innerHTML=`<div class="header" style="background:${wld.hdr}"><button id="fd-back" style="background:none;color:${acc};font-size:1rem;font-weight:600;padding:8px">← 返回</button><div style="font-size:0.8rem;font-weight:700;color:${acc}">🃏 單元${S.wk+1}</div></div>
+<div class="container" style="text-align:center;padding-top:40px;position:relative;z-index:300">
+<div style="font-size:3.5rem;margin-bottom:16px">🎉</div>
+<div style="font-size:1.5rem;font-weight:900;color:${dk?'#fff':wld.accent};margin-bottom:8px">這一輪完成！</div>
+<div style="font-size:0.95rem;color:${dk?wld.dimCol:'#8E8E93'};margin-bottom:28px">本輪會 ${S.fcRound.known} 個 · 不會 ${S.fcRound.unknown} 個</div>
+<div style="background:${wld.cardBg};border:1px solid ${wld.cardBorder};border-radius:18px;padding:22px;margin-bottom:24px">
+  <div style="display:flex;justify-content:space-around;margin-bottom:16px">
+    <div><div style="font-size:1.6rem;font-weight:900;color:#34C759">${st.known}</div><div style="font-size:0.72rem;color:${dk?wld.dimCol:'#8E8E93'};margin-top:2px">會</div></div>
+    <div><div style="font-size:1.6rem;font-weight:900;color:${acc}">${st.learning}</div><div style="font-size:0.72rem;color:${dk?wld.dimCol:'#8E8E93'};margin-top:2px">不會</div></div>
+    <div><div style="font-size:1.6rem;font-weight:900;color:${dk?wld.dimCol:'#8E8E93'}">${st.fresh}</div><div style="font-size:0.72rem;color:${dk?wld.dimCol:'#8E8E93'};margin-top:2px">還沒學</div></div>
+  </div>
+  <div style="height:10px;border-radius:5px;background:${dk?'rgba(255,255,255,0.1)':'#E5E5EA'}"><div style="width:${pct}%;height:100%;border-radius:5px;background:${acc};transition:width .4s"></div></div>
+  <div style="font-size:0.8rem;color:${dk?wld.dimCol:'#8E8E93'};margin-top:10px">本單元會 ${pct}%</div>
+</div>
+${noCount>0?`<button id="fd-practice-no" style="width:100%;background:${ORANGE};color:#fff;border:none;border-radius:16px;padding:16px;font-size:1rem;font-weight:800;cursor:pointer;margin-bottom:12px">只練不會的 ${noCount} 個 →</button>
+<button id="fd-again" style="width:100%;background:${dk?'rgba(255,255,255,0.08)':'#fff'};color:${dk?wld.txtCol:acc};border:1px solid ${wld.cardBorder};border-radius:16px;padding:14px;font-size:0.92rem;font-weight:700;cursor:pointer;margin-bottom:12px">整個單元再來一輪</button>`:`<div style="font-size:1rem;color:#34C759;font-weight:700;margin-bottom:16px">🏆 這個單元的字你全都會了！</div>
+<button id="fd-again" style="width:100%;background:${acc};color:#0F0E17;border:none;border-radius:16px;padding:16px;font-size:1rem;font-weight:800;cursor:pointer;margin-bottom:12px">整個單元再來一輪</button>`}
+<button id="fd-list" style="width:100%;background:${dk?'rgba(255,255,255,0.08)':'#fff'};color:${dk?wld.dimCol:'#8E8E93'};border:1px solid ${wld.cardBorder};border-radius:16px;padding:14px;font-size:0.92rem;font-weight:600;cursor:pointer">回到單元列表</button>
+</div>`;
+const fdBack=document.getElementById("fd-back");if(fdBack)fdBack.addEventListener("click",()=>{S.page="flashList";render();});
+const fdPracticeNo=document.getElementById("fd-practice-no");if(fdPracticeNo)fdPracticeNo.addEventListener("click",()=>flashSetFilter("no"));
+const fdAgain=document.getElementById("fd-again");if(fdAgain)fdAgain.addEventListener("click",()=>startFlash(S.lv,S.wk));
+const fdList=document.getElementById("fd-list");if(fdList)fdList.addEventListener("click",()=>{S.page="flashList";render();});
+// 清空動畫容器，避免殘留覆蓋層擋住按鈕點擊
+const pc=document.getElementById("particles");if(pc)pc.innerHTML="";
+const fl=document.getElementById("float");if(fl)fl.innerHTML="";
+window.scrollTo(0,0);
+}
+
 
 // === STUDY LIST 學習版單元列表 ===
 else if(S.page==="studyList"){
