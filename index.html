@@ -7458,7 +7458,7 @@ window.flashSyncList=function(word){
 if(cardEl){
   let dragging=false,startX=0,startY=0,dx=0,dy=0,moved=false,axis=null;
   const THRESHOLD=80; // 觸發判定的水平位移
-  const TAP_MAX=10;   // 視為點擊（翻面）的最大位移
+  const TAP_MAX=20;   // 視為點擊（翻面）的最大位移（放寬，避免手指自然晃動被誤判成滑動）
   const LOCK=12;      // 超過此位移就鎖定主軸方向
   function onStart(x,y){dragging=true;startX=x;startY=y;dx=0;dy=0;moved=false;axis=null;cardEl.style.transition="none";}
   function onMove(x,y){
