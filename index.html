@@ -6755,22 +6755,23 @@ window.highlightPattern=function(text){var html=text.replace(/&/g,"&amp;").repla
 window.extractEnglishSentences=function(text){var sentences=[];var lines=text.split("\n");for(var i=0;i<lines.length;i++){var line=lines[i].trim();if(line.match(/^[A-Z]/)&&line.match(/[.!?]$/)&&(line.match(/[a-zA-Z]/g)||[]).length>10){sentences.push(line);}}return sentences;};
 window.speakText=function(sentence){var encoded=encodeURIComponent(sentence);var googleUrl="https://translate.googleapis.com/translate_tts?ie=UTF-8&q="+encoded+"&tl=en&client=gtx";var audio=new Audio(googleUrl);audio.play().catch(function(){var u=new SpeechSynthesisUtterance(sentence);u.lang="en-US";u.rate=0.85;speechSynthesis.speak(u);});};
 window.addSpeakButtons=function(container,text){
-  // 從原始文字（還有\n的版本）抽取例句
   var sentences=[];
   var lines=text.split("\n");
   for(var i=0;i<lines.length;i++){
     var line=lines[i].trim();
-    if(line.match(/^[A-Z]/)&&line.match(/[.!?]$/)&&(line.match(/[a-zA-Z]/g)||[]).length>10){
+    var engCount=(line.match(/[a-zA-Z]/g)||[]).length;
+    var chiCount=(line.match(/[\u4e00-\u9fff]/g)||[]).length;
+    // 條件：大寫開頭、英文句號結尾、英文字母夠多、中文字少於3個（排除中文翻譯和標題）
+    if(line.match(/^[A-Z]/)&&line.match(/[.!?]$/)&&engCount>10&&chiCount<3){
       sentences.push(line);
     }
   }
   if(!sentences.length)return;
-  // 取得 container 裡所有文字節點，找到例句結尾後插入按鈕
   var html=container.innerHTML;
   sentences.forEach(function(s){
     var escaped=s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
     var re=new RegExp("("+escaped+")","g");
-    html=html.replace(re,'$1<button onclick="event.stopPropagation();window.speakText(\''+s.replace(/'/g,"\\'")+'\')" title="朗讀例句" style="background:none;border:none;cursor:pointer;font-size:1rem;margin-left:4px;padding:0 2px;vertical-align:middle;opacity:0.7;">🔊</button>');
+    html=html.replace(re,'$1<button onclick="event.stopPropagation();window.speakText(\''+s.replace(/\\/g,"\\\\").replace(/'/g,"\\'")+'\')" title="朗讀例句" style="background:none;border:none;cursor:pointer;font-size:1rem;margin-left:4px;padding:0 2px;vertical-align:middle;opacity:0.7;">🔊</button>');
   });
   container.innerHTML=html;
 };
