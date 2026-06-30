@@ -7019,7 +7019,6 @@ function flashMark(known){
     if(S.fcIdx>=S.fcQueue.length)S.fcIdx=S.fcQueue.length-1;
     S.fcFlip=false;
     const sy=window.scrollY||0;render();if(sy>0)window.scrollTo(0,sy);
-    const c=S.fcQueue[S.fcIdx];if(c)setTimeout(()=>speak(c.w),200);
     return;
   }
   recalcFcRound();
@@ -7053,7 +7052,6 @@ function flashNext(){
   render();
   // render 重建畫面後，恢復原本的捲動位置（讓使用者停在原地看清單）
   if(sy>0)window.scrollTo(0,sy);
-  const c=S.fcQueue[S.fcIdx];if(c)setTimeout(()=>speak(c.w),250);
 }
 // 純瀏覽：前後翻卡（不分類、不影響會/不會計數）
 function flashGo(dir){
@@ -7077,7 +7075,6 @@ function flashGo(dir){
     render();
     if(sy>0)window.scrollTo(0,sy);
     S.fcBusy=false;
-    const c=S.fcQueue[S.fcIdx];if(c)setTimeout(()=>speak(c.w),200);
   },280);
 }
 
@@ -7348,7 +7345,7 @@ app.innerHTML=`<div class="header" style="background:${wld.hdr}"><button id="fc-
 <div id="fc-stage" style="position:relative;height:34vh;min-height:180px;margin-bottom:6px">
   <div id="fc-card" style="position:absolute;inset:0;display:flex;align-items:stretch;justify-content:center;cursor:grab;touch-action:pan-y;will-change:transform">
     <div style="position:relative;width:100%;max-width:380px;perspective:1200px">
-      <button id="fc-speak" style="position:absolute;bottom:18px;right:18px;background:${dk?'rgba(255,255,255,0.12)':'rgba(255,255,255,0.9)'};border:none;border-radius:50%;width:42px;height:42px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1.1rem;z-index:5;box-shadow:0 2px 8px rgba(0,0,0,0.15)">🔊</button>
+      <div id="fc-speak" style="position:absolute;bottom:6px;right:6px;width:58px;height:58px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:5"><span style="background:${dk?'rgba(255,255,255,0.12)':'rgba(255,255,255,0.9)'};border-radius:50%;width:42px;height:42px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;box-shadow:0 2px 8px rgba(0,0,0,0.15)">🔊</span></div>
       <div id="fc-tag-known" style="position:absolute;top:20px;right:20px;border:3px solid ${GREEN};color:${GREEN};border-radius:10px;padding:4px 12px;font-size:1rem;font-weight:800;transform:rotate(12deg);opacity:0;transition:opacity .1s;z-index:5">會</div>
       <div id="fc-tag-unknown" style="position:absolute;top:20px;left:64px;border:3px solid ${ORANGE};color:${ORANGE};border-radius:10px;padding:4px 12px;font-size:1rem;font-weight:800;transform:rotate(-12deg);opacity:0;transition:opacity .1s;z-index:5">不會</div>
       <div id="fc-flipper" style="position:relative;width:100%;height:34vh;min-height:180px;transform-style:preserve-3d;transition:transform .5s;transform:rotateY(${flipped?'180deg':'0deg'})">
