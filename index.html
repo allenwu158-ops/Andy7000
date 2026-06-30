@@ -6756,9 +6756,11 @@ function playLU(){const n=[523,659,784,1047,784,1047,1319,1568];n.forEach((f,i)=
 
 const audioCache={};
 async function speak(w){try{Object.values(audioCache).forEach(a=>{try{a.pause();a.currentTime=0;}catch(e){}});try{speechSynthesis.cancel();}catch(e){}if(audioCache[w]){audioCache[w].currentTime=0;audioCache[w].play();return;}
-// 第一優先：Google 翻譯語音（覆蓋率最高、品質一致、穩定）
+// 第一優先：韋伯字典真人發音（音質最佳，經 Worker 中介保護 API Key）
+try{const r=await fetch(`https://gemini-proxy.allenwu158.workers.dev/mw-audio?word=${encodeURIComponent(w)}`);if(r.ok){const d=await r.json();if(d.audioUrl){const a=new Audio(d.audioUrl);await a.play();audioCache[w]=a;return;}}}catch(e){}
+// 第二優先：Google 翻譯語音（覆蓋率最高、品質一致、穩定）
 try{const a=new Audio(`https://translate.googleapis.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(w)}&tl=en&client=gtx`);await a.play();audioCache[w]=a;return;}catch(e){}
-// 第二備用：字典 API 真人錄音（部分單字才有）
+// 第三備用：免費字典 API 真人錄音（部分單字才有）
 try{const r=await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${w}`);if(r.ok){const d=await r.json();const au=d[0]?.phonetics?.find(p=>p.audio?.length>0)?.audio;if(au){const url=au.startsWith("//")?("https:"+au):au;const a=new Audio(url);await a.play();audioCache[w]=a;return;}}}catch(e){}
 // 最後備用：瀏覽器內建語音
 try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(w);u.lang="en-US";u.rate=0.85;speechSynthesis.speak(u);}catch(e){}}catch(e){}}
