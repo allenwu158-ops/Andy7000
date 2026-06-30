@@ -6761,7 +6761,6 @@ window.addSpeakButtons=function(container,text){
     var line=lines[i].trim();
     var engCount=(line.match(/[a-zA-Z]/g)||[]).length;
     var chiCount=(line.match(/[\u4e00-\u9fff]/g)||[]).length;
-    // 條件：大寫開頭、英文句號結尾、英文字母夠多、中文字少於3個（排除中文翻譯和標題）
     if(line.match(/^[A-Z]/)&&line.match(/[.!?]$/)&&engCount>10&&chiCount<3){
       sentences.push(line);
     }
@@ -6769,9 +6768,16 @@ window.addSpeakButtons=function(container,text){
   if(!sentences.length)return;
   var html=container.innerHTML;
   sentences.forEach(function(s){
-    var escaped=s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
-    var re=new RegExp("("+escaped+")","g");
-    html=html.replace(re,'$1<button onclick="event.stopPropagation();window.speakText(\''+s.replace(/\\/g,"\\\\").replace(/'/g,"\\'")+'\')" title="朗讀例句" style="background:none;border:none;cursor:pointer;font-size:1rem;margin-left:4px;padding:0 2px;vertical-align:middle;opacity:0.7;">🔊</button>');
+    // 取句子前6個英文字和最後6個字元做寬鬆匹配，中間允許任意HTML標籤
+    var words=s.replace(/[.!?]$/,"").split(/\s+/);
+    if(words.length<3)return;
+    var head=words.slice(0,3).join("\\s+");
+    var tail=words.slice(-2).join("[\\s\\S]{0,60}");
+    var endPunct=s.match(/[.!?]$/)[0];
+    var re=new RegExp("("+head+"[\\s\\S]{0,200}?"+tail+"\\s*"+"\\"+endPunct+")(?!\\s*🔊)(?!\\s*<button)","");
+    if(re.test(html)){
+      html=html.replace(re,'$1<button onclick="event.stopPropagation();window.speakText(\''+s.replace(/\\/g,"\\\\").replace(/'/g,"\\'")+'\')" title="朗讀例句" style="background:none;border:none;cursor:pointer;font-size:1rem;margin-left:4px;padding:0 2px;vertical-align:middle;opacity:0.7;">🔊</button>');
+    }
   });
   container.innerHTML=html;
 };
