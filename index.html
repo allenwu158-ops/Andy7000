@@ -6965,6 +6965,9 @@ function flashFlip(){
   if(flipper){
     // 直接操作 DOM 播放 3D 翻轉動畫（render 會重建 DOM 打斷動畫，故不在此 render）
     flipper.style.transform=`rotateY(${S.fcFlip?'180deg':'0deg'})`;
+    const cb=document.getElementById("fc-ctrl-back"),cf=document.getElementById("fc-ctrl-front");
+    if(cb)cb.style.display=S.fcFlip?"flex":"none";
+    if(cf)cf.style.display=S.fcFlip?"none":"flex";
   }else{render();}
 }
 function flashSwipeOut(known){
@@ -7340,6 +7343,7 @@ app.innerHTML=`<div class="header" style="background:${wld.hdr}"><button id="fc-
 <div id="fc-stage" style="position:relative;height:34vh;min-height:180px;margin-bottom:6px">
   <div id="fc-card" style="position:absolute;inset:0;display:flex;align-items:stretch;justify-content:center;cursor:grab;touch-action:pan-y;will-change:transform">
     <div style="position:relative;width:100%;max-width:380px;perspective:1200px">
+      <div id="fc-speak" style="position:absolute;bottom:6px;right:6px;width:58px;height:58px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:5;touch-action:none"><span style="background:${dk?'rgba(255,255,255,0.12)':'rgba(255,255,255,0.9)'};border-radius:50%;width:42px;height:42px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;box-shadow:0 2px 8px rgba(0,0,0,0.15)">🔊</span></div>
       <div id="fc-tag-known" style="position:absolute;top:20px;right:20px;border:3px solid ${GREEN};color:${GREEN};border-radius:10px;padding:4px 12px;font-size:1rem;font-weight:800;transform:rotate(12deg);opacity:0;transition:opacity .1s;z-index:5">會</div>
       <div id="fc-tag-unknown" style="position:absolute;top:20px;left:64px;border:3px solid ${ORANGE};color:${ORANGE};border-radius:10px;padding:4px 12px;font-size:1rem;font-weight:800;transform:rotate(-12deg);opacity:0;transition:opacity .1s;z-index:5">不會</div>
       <div id="fc-flipper" style="position:relative;width:100%;height:34vh;min-height:180px;transform-style:preserve-3d;transition:transform .5s;transform:rotateY(${flipped?'180deg':'0deg'})">
@@ -7356,12 +7360,12 @@ app.innerHTML=`<div class="header" style="background:${wld.hdr}"><button id="fc-
   </div>
 </div>
 <div style="padding:4px 0 12px">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-    <button id="fc-undo" style="background:none;border:none;cursor:${canUndo?'pointer':'default'};opacity:${canUndo?'1':'0.25'};padding:6px 10px;font-size:1.3rem;color:${dk?'#E2E8F0':'#1C1C1E'}">↩</button>
-    <div style="font-size:0.8rem;color:${dk?wld.dimCol:'#8E8E93'};font-weight:600">點卡片翻開 · 左右滑動換卡</div>
-    <div style="width:40px"></div>
+  <div id="fc-ctrl-back" style="display:${flipped?'flex':'none'};gap:12px"><button id="fc-unknown" style="flex:1;background:${dk?'rgba(255,159,10,0.12)':'#fff'};color:${ORANGE};border:2px solid ${ORANGE};border-radius:14px;padding:14px;font-size:1rem;font-weight:700;cursor:pointer">不會</button><button id="fc-known" style="flex:1;background:${GREEN};color:#fff;border:none;border-radius:14px;padding:14px;font-size:1rem;font-weight:700;cursor:pointer">會</button></div>
+  <div id="fc-ctrl-front" style="display:${flipped?'none':'flex'};align-items:center;justify-content:space-between">
+    <button id="fc-undo" style="background:none;border:none;cursor:${canUndo?'pointer':'default'};opacity:${canUndo?'1':'0.25'};padding:10px;font-size:1.4rem;color:${dk?'#E2E8F0':'#1C1C1E'}">↩</button>
+    <div style="font-size:0.85rem;color:${dk?wld.dimCol:'#8E8E93'};font-weight:600">點卡片翻開 · 左右滑動換卡</div>
+    <div style="width:44px"></div>
   </div>
-  <div style="display:flex;gap:10px"><button id="fc-unknown" style="flex:1;background:${dk?'rgba(255,159,10,0.12)':'#fff'};color:${ORANGE};border:2px solid ${ORANGE};border-radius:14px;padding:14px;font-size:1rem;font-weight:700;cursor:pointer">不會</button><button id="fc-known" style="flex:1;background:${GREEN};color:#fff;border:none;border-radius:14px;padding:14px;font-size:1rem;font-weight:700;cursor:pointer">會</button><button id="fc-speak" style="width:54px;background:${acc};border:none;border-radius:14px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1.2rem;color:#fff">🔊</button></div>
 </div>
 <div style="border-top:1px solid ${wld.cardBorder};margin:8px 0 20px;padding-top:24px">
   <div style="font-size:1.05rem;font-weight:800;color:${dk?'#fff':'#1C1C1E'};margin-bottom:16px">本單元進度</div>
@@ -7395,7 +7399,8 @@ const cardEl=document.getElementById("fc-card");
 const speakBtn=document.getElementById("fc-speak");
 const tagKnown=document.getElementById("fc-tag-known");
 const tagUnknown=document.getElementById("fc-tag-unknown");
-if(speakBtn)speakBtn.addEventListener("click",()=>{speak(card.w);});
+if(speakBtn)speakBtn.addEventListener("click",(e)=>{e.stopPropagation();e.preventDefault();speak(card.w);});
+if(speakBtn)speakBtn.addEventListener("touchstart",(e)=>{e.stopPropagation();},{passive:true});
 const knownBtn=document.getElementById("fc-known");if(knownBtn)knownBtn.addEventListener("click",()=>flashMark(true));
 const unknownBtn=document.getElementById("fc-unknown");if(unknownBtn)unknownBtn.addEventListener("click",()=>flashMark(false));
 const undoBtn=document.getElementById("fc-undo");if(undoBtn&&canUndo)undoBtn.addEventListener("click",()=>flashUndo());
@@ -7494,13 +7499,13 @@ if(cardEl){
       cardEl.style.transform="translateX(0)";
     }
   }
-  cardEl.addEventListener("touchstart",(e)=>{onStart(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
+  cardEl.addEventListener("touchstart",(e)=>{if(e.target.closest("#fc-speak"))return;onStart(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
   cardEl.addEventListener("touchmove",(e)=>{onMove(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
   cardEl.addEventListener("touchend",()=>{onEnd();});
   // 桌機滑鼠也支援（拖曳期間才綁 window，結束即移除，避免累積）
   function winMove(e){if(dragging)onMove(e.clientX,e.clientY);}
   function winUp(){if(dragging){onEnd();}window.removeEventListener("mousemove",winMove);window.removeEventListener("mouseup",winUp);}
-  cardEl.addEventListener("mousedown",(e)=>{onStart(e.clientX,e.clientY);window.addEventListener("mousemove",winMove);window.addEventListener("mouseup",winUp);});
+  cardEl.addEventListener("mousedown",(e)=>{if(e.target.closest("#fc-speak"))return;onStart(e.clientX,e.clientY);window.addEventListener("mousemove",winMove);window.addEventListener("mouseup",winUp);});
 }
 }
 }
