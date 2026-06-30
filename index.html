@@ -6947,7 +6947,6 @@ function flashSetFilter(filter){
   S.fcRound={known:0,unknown:0};
   render();
   window.scrollTo(0,0);
-  setTimeout(()=>{const c=S.fcQueue[0];if(c)speak(c.w);},300);
 }
 function startFlash(lv,wk){
   try{gC();}catch(e){}
@@ -6959,7 +6958,6 @@ function startFlash(lv,wk){
   S.fcIdx=0;S.fcFlip=false;S.fcRound={known:0,unknown:0};S.fcHist=[];
   render();
   window.scrollTo(0,0);
-  setTimeout(()=>{const c=S.fcQueue[0];if(c)speak(c.w);},300);
 }
 function flashFlip(){
   S.fcFlip=!S.fcFlip;
