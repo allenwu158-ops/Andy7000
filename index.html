@@ -6754,7 +6754,26 @@ window.cleanMd=function(t){return t.replace(/\*\*/g,"").replace(/\*/g,"").replac
 window.highlightPattern=function(text){var html=text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");var idx=html.indexOf("\u5f62\u4f3c\u8a18\u61b6\u6cd5");if(idx===-1)return html;var before=html.substring(0,idx);var after=html.substring(idx);var m=text.match(/\u5b83\u5011\u90fd\u6709\s*-?([a-zA-Z]+)-?/);if(m){var p=m[1];after=after.replace(new RegExp("("+p+")","gi"),'<span style="background:#FFFF00;padding:0 1px;border-radius:2px">$1</span>');}return before+after;};
 window.extractEnglishSentences=function(text){var sentences=[];var lines=text.split("\n");for(var i=0;i<lines.length;i++){var line=lines[i].trim();if(line.match(/^[A-Z]/)&&line.match(/[.!?]$/)&&(line.match(/[a-zA-Z]/g)||[]).length>10){sentences.push(line);}}return sentences;};
 window.speakText=function(sentence){var encoded=encodeURIComponent(sentence);var googleUrl="https://translate.googleapis.com/translate_tts?ie=UTF-8&q="+encoded+"&tl=en&client=gtx";var audio=new Audio(googleUrl);audio.play().catch(function(){var u=new SpeechSynthesisUtterance(sentence);u.lang="en-US";u.rate=0.85;speechSynthesis.speak(u);});};
-window.addSpeakButtons=function(container,text){var sentences=window.extractEnglishSentences(text);if(!sentences.length)return;var allNodes=container.querySelectorAll("br");allNodes.forEach(function(br){var fullText="";var node=br.previousSibling;while(node){fullText=(node.textContent||node.nodeValue||"")+fullText;node=node.previousSibling;}fullText=fullText.trim();sentences.forEach(function(s){var key=s.replace(/[.!?]$/,"").trim();if(fullText.indexOf(key)!==-1&&!br._speakAdded){br._speakAdded=true;var btn=document.createElement("button");btn.innerHTML="🔊";btn.title="朗讀例句";btn.style.cssText="background:none;border:none;cursor:pointer;font-size:1rem;margin-left:4px;padding:0 2px;vertical-align:middle;opacity:0.7;";(function(sentence){btn.onclick=function(e){e.stopPropagation();window.speakText(sentence);};})(s);br.parentNode.insertBefore(btn,br);}});});};
+window.addSpeakButtons=function(container,text){
+  // 從原始文字（還有\n的版本）抽取例句
+  var sentences=[];
+  var lines=text.split("\n");
+  for(var i=0;i<lines.length;i++){
+    var line=lines[i].trim();
+    if(line.match(/^[A-Z]/)&&line.match(/[.!?]$/)&&(line.match(/[a-zA-Z]/g)||[]).length>10){
+      sentences.push(line);
+    }
+  }
+  if(!sentences.length)return;
+  // 取得 container 裡所有文字節點，找到例句結尾後插入按鈕
+  var html=container.innerHTML;
+  sentences.forEach(function(s){
+    var escaped=s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+    var re=new RegExp("("+escaped+")","g");
+    html=html.replace(re,'$1<button onclick="event.stopPropagation();window.speakText(\''+s.replace(/'/g,"\\'")+'\')" title="朗讀例句" style="background:none;border:none;cursor:pointer;font-size:1rem;margin-left:4px;padding:0 2px;vertical-align:middle;opacity:0.7;">🔊</button>');
+  });
+  container.innerHTML=html;
+};
 
 function animateXP(id,from,to,color){const el=document.getElementById(id);if(!el)return;const diff=to-from,steps=15,st=40;let step=0;const timer=setInterval(()=>{step++;const p=step/steps;const e=1-Math.pow(1-p,3);el.textContent=Math.round(from+diff*e)+" 單挑積分";el.style.transform=`scale(${1+0.15*Math.sin(p*Math.PI)})`;el.style.color=color;if(step>=steps){clearInterval(timer);el.style.transform="scale(1)";}},st);}
 
