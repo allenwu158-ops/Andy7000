@@ -7496,24 +7496,7 @@ if(cardEl){
   const THRESHOLD=80; // 觸發判定的水平位移
   const TAP_MAX=20;   // 視為點擊（翻面）的最大位移（放寬，避免手指自然晃動被誤判成滑動）
   const LOCK=12;      // 超過此位移就鎖定主軸方向
-  // 用實際觸碰座標比對喇叭按鈕當下的畫面位置，不依賴 e.target。
-  // 原因：iOS Safari/Chrome（iOS 上所有瀏覽器底層都是 WebKit）對於「剛被 innerHTML 重新產生出來的全新元素」，
-  // 第一次觸碰有機會把觸碰目標誤判成舊版面的位置，導致事件根本沒有正確派發到按鈕本身，
-  // 這種情況下不管在 JS 裡加多少層 stopPropagation 都沒用，因為問題發生在瀏覽器判斷「這次觸碰是誰」的階段，
-  // 早於我們的程式碼能介入的時間點。座標永遠是客觀準確的，所以改用座標直接比對按鈕當下的實際範圍。
-  // 暫時性除錯工具：把每次觸碰的座標跟喇叭按鈕當下的實際位置印在畫面最上方，
-  // 方便直接比對「有效」跟「無效」的頁面差在哪裡。確認問題解決後這段可以整段刪掉。
-  function fcDebugLog(msg){
-    let panel=document.getElementById("fc-debug-panel");
-    if(!panel){
-      panel=document.createElement("div");
-      panel.id="fc-debug-panel";
-      panel.style.cssText="position:fixed;top:0;left:0;right:0;background:rgba(0,0,0,0.88);color:#34C759;font-size:11px;font-family:monospace;padding:8px;z-index:99999;max-height:32vh;overflow-y:auto;white-space:pre-wrap;line-height:1.6;pointer-events:none";
-      document.body.appendChild(panel);
-    }
-    const time=new Date().toLocaleTimeString("zh-TW",{hour12:false});
-    panel.textContent=`[${time}] ${msg}\n`+panel.textContent;
-  }
+  // 用實際觸碰座標比對喇叭按鈕當下的畫面位置，不依賴 e.target，避免特定情境下事件目標判定不準確
   function isOnSpeakBtn(x,y){
     const btn=document.getElementById("fc-speak-btn");
     if(!btn)return false;
@@ -7527,10 +7510,7 @@ if(cardEl){
   }
   let speakBtnHitOnStart=false;
   function onStart(x,y,target){
-    const btn=document.getElementById("fc-speak-btn");
-    const r=btn?btn.getBoundingClientRect():null;
     const hit=isOnSpeakBtn(x,y);
-    fcDebugLog(`[start] 單字=${card.w} 觸碰=(${Math.round(x)},${Math.round(y)}) 按鈕範圍=${r?`[${Math.round(r.left)},${Math.round(r.top)}]~[${Math.round(r.right)},${Math.round(r.bottom)}]`:"❌找不到按鈕元素"} 判定命中=${hit}`);
     speakBtnHitOnStart=hit;
     if(hit){
       // 這裡只記錄「這次觸碰起點是喇叭按鈕」，不在這裡呼叫 speak()。
@@ -7558,7 +7538,6 @@ if(cardEl){
   function onEnd(){
     if(speakBtnHitOnStart){
       speakBtnHitOnStart=false;
-      fcDebugLog(`[end] 觸發播放：${card.w}`);
       triggerSpeakBtn();
       return;
     }
