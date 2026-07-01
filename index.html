@@ -46,6 +46,9 @@ button{font-family:inherit;-webkit-appearance:none;border:none;cursor:pointer;}
 @keyframes goldRain{0%{opacity:1;transform:translateY(0) rotate(0)}100%{opacity:0;transform:translateY(120vh) rotate(720deg)}}
 @keyframes shimmer{0%,100%{opacity:0.6}50%{opacity:1}}
 @keyframes speakPress{0%{background:#F59E0B;box-shadow:0 0 0 0 rgba(245,158,11,.55);transform:scale(1.1)}55%{box-shadow:0 0 0 14px rgba(245,158,11,0)}100%{background:var(--fc-speak-bg);box-shadow:0 0 0 14px rgba(245,158,11,0);transform:scale(1)}}
+@keyframes wordSpeakPulse{0%{transform:scale(1)}35%{transform:scale(1.5)}100%{transform:scale(1)}}
+.fc-word-speak{display:inline-block}
+.fc-word-speak-active{animation:wordSpeakPulse .35s ease-out}
 .fc-speak-active{animation:speakPress .45s ease-out}
 .unit-complete-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;animation:fadeIn .3s ease-out}
 .unit-complete-box{text-align:center;padding:40px 28px;max-width:360px;width:90%;animation:unitCompleteIn .5s cubic-bezier(.34,1.56,.64,1) forwards}
@@ -7406,14 +7409,13 @@ app.innerHTML=`<div class="header" style="position:static;background:${wld.hdr}"
   <div style="width:44px;height:44px;border-radius:50%;border:2.5px solid ${GREEN};display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:800;color:${GREEN};transition:transform .2s" id="fc-cnt-known">${S.fcRound.known}</div>
 </div>
 <div id="fc-stage" style="position:relative;height:34vh;min-height:180px;margin-bottom:6px">
-  <div id="fc-card" style="position:absolute;inset:0;display:flex;align-items:stretch;justify-content:center;cursor:grab;touch-action:pan-y;will-change:transform">
+  <div id="fc-card" style="position:absolute;inset:0;display:flex;align-items:stretch;justify-content:center;cursor:grab;touch-action:pan-y;will-change:transform;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent">
     <div style="position:relative;width:100%;max-width:380px;perspective:1200px">
-      <button id="fc-speak-btn" style="position:absolute;bottom:14px;right:14px;z-index:8;--fc-speak-bg:${dk?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.06)'};background:var(--fc-speak-bg);border:none;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:1.15rem;cursor:pointer;touch-action:manipulation">🔊</button>
       <div id="fc-tag-known" style="position:absolute;top:20px;right:20px;border:3px solid ${GREEN};color:${GREEN};border-radius:10px;padding:4px 12px;font-size:1rem;font-weight:800;transform:rotate(12deg);opacity:0;transition:opacity .1s;z-index:5">會</div>
       <div id="fc-tag-unknown" style="position:absolute;top:20px;left:64px;border:3px solid ${ORANGE};color:${ORANGE};border-radius:10px;padding:4px 12px;font-size:1rem;font-weight:800;transform:rotate(-12deg);opacity:0;transition:opacity .1s;z-index:5">不會</div>
       <div id="fc-flipper" style="position:relative;width:100%;height:34vh;min-height:180px;transform-style:preserve-3d;transition:transform .5s;transform:rotateY(${flipped?'180deg':'0deg'})">
         <div style="position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:24px;background:${wld.cardBg};border:2px solid ${wld.cardBorder};display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.18)">
-          <div style="font-size:2.4rem;font-weight:900;color:${dk?'#fff':'#1C1C1E'};text-align:center">${frontTxt}</div>
+          <div style="font-size:2.4rem;font-weight:900;color:${dk?'#fff':'#1C1C1E'};text-align:center">${frontTxt} <span class="fc-word-speak" data-w="${card.w.replace(/"/g,'')}" style="cursor:pointer;opacity:0.4;font-size:0.5em;vertical-align:middle">🔊</span></div>
         </div>
         <div style="position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:24px;background:${dk?'rgba(245,158,11,0.1)':'#FFF7E6'};border:2px solid ${acc};display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.18);transform:rotateY(180deg)">
           <div style="font-size:0.68rem;color:${acc};text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;font-weight:600">中文意思</div>
@@ -7432,7 +7434,7 @@ app.innerHTML=`<div class="header" style="position:static;background:${wld.hdr}"
     <div style="width:44px"></div>
   </div>
 </div>
-<div style="border-top:1px solid ${wld.cardBorder};margin:8px 0 20px;padding-top:24px">
+<div style="border-top:1px solid ${wld.cardBorder};margin:8px 0 20px;padding-top:16px">
   <div style="font-size:1.05rem;font-weight:800;color:${dk?'#fff':'#1C1C1E'};margin-bottom:16px">本單元進度</div>
   <div style="display:flex;justify-content:space-around;margin-bottom:14px">
     <div style="text-align:center"><div id="fc-stat-known" style="font-size:1.7rem;font-weight:900;color:${GREEN}">${fcSt.known}</div><div style="font-size:0.72rem;color:${dk?wld.dimCol:'#8E8E93'};margin-top:2px">會</div></div>
@@ -7461,16 +7463,20 @@ app.innerHTML=`<div class="header" style="position:static;background:${wld.hdr}"
 // 真實 DOM 綁定（手機穩定）
 const back=document.getElementById("fc-back");if(back)back.addEventListener("click",()=>{S.page="flashList";render();});
 const cardEl=document.getElementById("fc-card");
-const speakBtn=document.getElementById("fc-speak-btn");
-if(speakBtn){
-  speakBtn.addEventListener("touchstart",(e)=>{e.stopPropagation();},{passive:true});
-  speakBtn.addEventListener("mousedown",(e)=>{e.stopPropagation();});
-  speakBtn.addEventListener("click",(e)=>{e.stopPropagation();e.preventDefault();speak(card.w);
-    speakBtn.classList.remove("fc-speak-active");
-    void speakBtn.offsetWidth;
-    speakBtn.classList.add("fc-speak-active");
+// 卡片正面單字旁邊的喇叭：跟卡片翻面手勢共用同一個容器，
+// 一定要在 touchstart／mousedown 這個更早的時機點就攔截冒泡，
+// 不然點下去會同時觸發「播放發音」跟「翻面」兩件事
+document.querySelectorAll(".fc-word-speak").forEach(el=>{
+  el.addEventListener("touchstart",(e)=>{e.stopPropagation();},{passive:true});
+  el.addEventListener("mousedown",(e)=>{e.stopPropagation();});
+  el.addEventListener("click",(e)=>{
+    e.stopPropagation();e.preventDefault();
+    speak(el.getAttribute("data-w"));
+    el.classList.remove("fc-word-speak-active");
+    void el.offsetWidth; // 強制重新計算樣式，讓動畫能在連續點擊時重新觸發
+    el.classList.add("fc-word-speak-active");
   });
-}
+});
 const tagKnown=document.getElementById("fc-tag-known");
 const tagUnknown=document.getElementById("fc-tag-unknown");
 const knownBtn=document.getElementById("fc-known");if(knownBtn)knownBtn.addEventListener("click",()=>flashMark(true));
@@ -7536,33 +7542,9 @@ window.flashSyncList=function(word){
 if(cardEl){
   let dragging=false,startX=0,startY=0,dx=0,dy=0,moved=false,axis=null;
   const THRESHOLD=80; // 觸發判定的水平位移
-  const TAP_MAX=20;   // 視為點擊（翻面）的最大位移（放寬，避免手指自然晃動被誤判成滑動）
-  const LOCK=12;      // 超過此位移就鎖定主軸方向
-  // 用實際觸碰座標比對喇叭按鈕當下的畫面位置，不依賴 e.target，避免特定情境下事件目標判定不準確
-  function isOnSpeakBtn(x,y){
-    const btn=document.getElementById("fc-speak-btn");
-    if(!btn)return false;
-    const r=btn.getBoundingClientRect();
-    const m=12; // 容錯緩衝：往外多留一圈，手指沒有精準點在按鈕正中央也能判定命中
-    return x>=r.left-m&&x<=r.right+m&&y>=r.top-m&&y<=r.bottom+m;
-  }
-  function triggerSpeakBtn(){
-    const btn=document.getElementById("fc-speak-btn");
-    speak(card.w);
-    if(btn){btn.classList.remove("fc-speak-active");void btn.offsetWidth;btn.classList.add("fc-speak-active");}
-  }
-  let speakBtnHitOnStart=false;
+  const TAP_MAX=36;   // 視為點擊（翻面）的最大位移（手機觸控天生會有幾像素晃動，門檻放寬避免誤判成滑動）
+  const LOCK=20;      // 超過此位移就鎖定主軸方向
   function onStart(x,y,target){
-    const hit=isOnSpeakBtn(x,y);
-    speakBtnHitOnStart=hit;
-    if(hit){
-      // 這裡只記錄「這次觸碰起點是喇叭按鈕」，不在這裡呼叫 speak()。
-      // 原因：iOS 對於在 touchstart（手指剛碰到螢幕）這麼早的時機點呼叫播放，
-      // 不一定會被視為有效的使用者手勢；touchend（手指放開）才更接近瀏覽器認可的時機，
-      // 真正的播放觸發移到 onEnd 裡執行。這裡只需要確保不要進入拖曳／翻面判斷。
-      dragging=false;
-      return;
-    }
     dragging=true;startX=x;startY=y;dx=0;dy=0;moved=false;axis=null;cardEl.style.transition="none";
   }
   function onMove(x,y){
@@ -7579,11 +7561,6 @@ if(cardEl){
     cardEl.style.transform=`translateX(${dx}px)`;
   }
   function onEnd(){
-    if(speakBtnHitOnStart){
-      speakBtnHitOnStart=false;
-      triggerSpeakBtn();
-      return;
-    }
     if(!dragging)return;dragging=false;
     // 垂直捲動，不做任何判定
     if(axis==="y"){return;}
@@ -7607,7 +7584,7 @@ if(cardEl){
   cardEl.addEventListener("touchend",()=>{onEnd();});
   // 桌機滑鼠也支援（拖曳期間才綁 window，結束即移除，避免累積）
   function winMove(e){if(dragging)onMove(e.clientX,e.clientY);}
-  function winUp(){if(dragging||speakBtnHitOnStart){onEnd();}window.removeEventListener("mousemove",winMove);window.removeEventListener("mouseup",winUp);}
+  function winUp(){if(dragging){onEnd();}window.removeEventListener("mousemove",winMove);window.removeEventListener("mouseup",winUp);}
   cardEl.addEventListener("mousedown",(e)=>{onStart(e.clientX,e.clientY,e.target);window.addEventListener("mousemove",winMove);window.addEventListener("mouseup",winUp);});
 
   // ===== 邊緣滑動返回：從螢幕最左邊緣往右滑，回到閃卡單元列表 =====
