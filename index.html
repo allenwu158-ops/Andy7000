@@ -6771,11 +6771,11 @@ function toAudioId(w){return w.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(
     audioUnlocked=true;
     try{
       const a=new Audio(`${AUDIO_BASE_URL}/a.mp3`);
-      a.muted=true;
-      a.volume=0; // 雙重保險：就算 muted 在某些瀏覽器上沒有立刻生效，音量也是 0，不會漏音
+      // 這裡故意不用 muted=true：瀏覽器很可能把「靜音播放」判定成不算數的無效播放，
+      // 導致播放權限根本沒有真正被解鎖。改用音量歸零，使用者一樣聽不到聲音，
+      // 但瀏覽器會把它當成一次「真正的播放」，藉此正確解鎖。
+      a.volume=0;
       a.play().then(()=>{a.pause();}).catch(()=>{});
-      // 這顆 Audio 物件只用來解鎖播放權限，用完即丟，不會再被重複使用，
-      // 所以不需要再把它解除靜音、也不需要重置播放進度
     }catch(e){}
   }
   document.addEventListener("touchstart",unlockAudio,{once:true,capture:true,passive:true});
