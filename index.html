@@ -6772,7 +6772,10 @@ function toAudioId(w){return w.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(
     try{
       const a=new Audio(`${AUDIO_BASE_URL}/a.mp3`);
       a.muted=true;
-      a.play().then(()=>{a.pause();a.currentTime=0;a.muted=false;}).catch(()=>{});
+      a.volume=0; // 雙重保險：就算 muted 在某些瀏覽器上沒有立刻生效，音量也是 0，不會漏音
+      a.play().then(()=>{a.pause();}).catch(()=>{});
+      // 這顆 Audio 物件只用來解鎖播放權限，用完即丟，不會再被重複使用，
+      // 所以不需要再把它解除靜音、也不需要重置播放進度
     }catch(e){}
   }
   document.addEventListener("touchstart",unlockAudio,{once:true,capture:true,passive:true});
