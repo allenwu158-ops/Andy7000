@@ -6757,6 +6757,22 @@ function playMs(w){[...w.okNotes,w.okNotes[2]*1.25,w.okNotes[2]*1.5].forEach((f,
 function playLU(){const n=[523,659,784,1047,784,1047,1319,1568];n.forEach((f,i)=>{tn(f,.2,"sine",.14,i*.1);tn(f*.5,.2,"triangle",.06,i*.1);});tn(1568,.6,"sine",.15,n.length*.1);}
 
 const audioCache={};
+// 音訊解鎖：許多手機瀏覽器（尤其 LINE、Facebook 這類 App 內建瀏覽器）規定，
+// 整個網頁生命週期「第一次」播放聲音一定會被擋下，必須先有一次播放嘗試（不管成功與否），
+// 之後才會真正放行。這裡搶在使用者點喇叭之前，趁第一次互動就先消耗掉這個限制。
+(function(){
+  let audioUnlocked=false;
+  function unlockAudio(){
+    if(audioUnlocked)return;
+    audioUnlocked=true;
+    try{
+      const silent=new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=");
+      silent.play().then(()=>{silent.pause();}).catch(()=>{});
+    }catch(e){}
+  }
+  document.addEventListener("touchstart",unlockAudio,{once:true,capture:true,passive:true});
+  document.addEventListener("click",unlockAudio,{once:true,capture:true});
+})();
 // 音檔存放的 CDN 網域，跟唐奇單挑共用同一個 R2 音檔庫（拼字重疊即可直接沿用，不用重新生成）
 const AUDIO_BASE_URL="https://pub-fffac98b89b14ac0ab30759731e6dacb.r2.dev";
 function toAudioId(w){return w.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"")||"word";}
@@ -7348,7 +7364,7 @@ app.innerHTML=`<div class="header" style="background:${wld.hdr}"><button id="fc-
 <div id="fc-stage" style="position:relative;height:34vh;min-height:180px;margin-bottom:6px">
   <div id="fc-card" style="position:absolute;inset:0;display:flex;align-items:stretch;justify-content:center;cursor:grab;touch-action:pan-y;will-change:transform">
     <div style="position:relative;width:100%;max-width:380px;perspective:1200px">
-      <button id="fc-speak-btn" style="position:absolute;bottom:16px;right:16px;z-index:8;--fc-speak-bg:${dk?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.06)'};background:var(--fc-speak-bg);border:none;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:1.15rem;cursor:pointer">🔊</button>
+      <button id="fc-speak-btn" style="position:absolute;bottom:14px;right:14px;z-index:8;--fc-speak-bg:${dk?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.06)'};background:var(--fc-speak-bg);border:none;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:1.15rem;cursor:pointer;touch-action:manipulation">🔊</button>
       <div id="fc-tag-known" style="position:absolute;top:20px;right:20px;border:3px solid ${GREEN};color:${GREEN};border-radius:10px;padding:4px 12px;font-size:1rem;font-weight:800;transform:rotate(12deg);opacity:0;transition:opacity .1s;z-index:5">會</div>
       <div id="fc-tag-unknown" style="position:absolute;top:20px;left:64px;border:3px solid ${ORANGE};color:${ORANGE};border-radius:10px;padding:4px 12px;font-size:1rem;font-weight:800;transform:rotate(-12deg);opacity:0;transition:opacity .1s;z-index:5">不會</div>
       <div id="fc-flipper" style="position:relative;width:100%;height:34vh;min-height:180px;transform-style:preserve-3d;transition:transform .5s;transform:rotateY(${flipped?'180deg':'0deg'})">
@@ -7478,7 +7494,32 @@ if(cardEl){
   const THRESHOLD=80; // 觸發判定的水平位移
   const TAP_MAX=20;   // 視為點擊（翻面）的最大位移（放寬，避免手指自然晃動被誤判成滑動）
   const LOCK=12;      // 超過此位移就鎖定主軸方向
-  function onStart(x,y){dragging=true;startX=x;startY=y;dx=0;dy=0;moved=false;axis=null;cardEl.style.transition="none";}
+  // 用實際觸碰座標比對喇叭按鈕當下的畫面位置，不依賴 e.target。
+  // 原因：iOS Safari/Chrome（iOS 上所有瀏覽器底層都是 WebKit）對於「剛被 innerHTML 重新產生出來的全新元素」，
+  // 第一次觸碰有機會把觸碰目標誤判成舊版面的位置，導致事件根本沒有正確派發到按鈕本身，
+  // 這種情況下不管在 JS 裡加多少層 stopPropagation 都沒用，因為問題發生在瀏覽器判斷「這次觸碰是誰」的階段，
+  // 早於我們的程式碼能介入的時間點。座標永遠是客觀準確的，所以改用座標直接比對按鈕當下的實際範圍。
+  function isOnSpeakBtn(x,y){
+    const btn=document.getElementById("fc-speak-btn");
+    if(!btn)return false;
+    const r=btn.getBoundingClientRect();
+    return x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom;
+  }
+  function triggerSpeakBtn(){
+    const btn=document.getElementById("fc-speak-btn");
+    speak(card.w);
+    if(btn){btn.classList.remove("fc-speak-active");void btn.offsetWidth;btn.classList.add("fc-speak-active");}
+  }
+  function onStart(x,y,target){
+    if(isOnSpeakBtn(x,y)){
+      // 觸碰座標落在喇叭按鈕範圍內：不管瀏覽器認為這次觸碰的目標是誰，直接自己觸發發音跟動畫，
+      // 同時完全不進入拖曳判斷，避免被誤判成點擊卡片翻面
+      triggerSpeakBtn();
+      dragging=false;
+      return;
+    }
+    dragging=true;startX=x;startY=y;dx=0;dy=0;moved=false;axis=null;cardEl.style.transition="none";
+  }
   function onMove(x,y){
     if(!dragging)return;
     dx=x-startX;dy=y-startY;
@@ -7511,13 +7552,13 @@ if(cardEl){
       cardEl.style.transform="translateX(0)";
     }
   }
-  cardEl.addEventListener("touchstart",(e)=>{onStart(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
+  cardEl.addEventListener("touchstart",(e)=>{onStart(e.touches[0].clientX,e.touches[0].clientY,e.target);},{passive:true});
   cardEl.addEventListener("touchmove",(e)=>{onMove(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
   cardEl.addEventListener("touchend",()=>{onEnd();});
   // 桌機滑鼠也支援（拖曳期間才綁 window，結束即移除，避免累積）
   function winMove(e){if(dragging)onMove(e.clientX,e.clientY);}
   function winUp(){if(dragging){onEnd();}window.removeEventListener("mousemove",winMove);window.removeEventListener("mouseup",winUp);}
-  cardEl.addEventListener("mousedown",(e)=>{onStart(e.clientX,e.clientY);window.addEventListener("mousemove",winMove);window.addEventListener("mouseup",winUp);});
+  cardEl.addEventListener("mousedown",(e)=>{onStart(e.clientX,e.clientY,e.target);window.addEventListener("mousemove",winMove);window.addEventListener("mouseup",winUp);});
 }
 }
 }
