@@ -44,6 +44,8 @@ button{font-family:inherit;-webkit-appearance:none;border:none;cursor:pointer;}
 @keyframes unitCompleteIn{0%{opacity:0;transform:scale(0.5)}60%{transform:scale(1.05)}100%{opacity:1;transform:scale(1)}}
 @keyframes goldRain{0%{opacity:1;transform:translateY(0) rotate(0)}100%{opacity:0;transform:translateY(120vh) rotate(720deg)}}
 @keyframes shimmer{0%,100%{opacity:0.6}50%{opacity:1}}
+@keyframes speakPress{0%{background:#F59E0B;box-shadow:0 0 0 0 rgba(245,158,11,.55);transform:scale(1.1)}55%{box-shadow:0 0 0 14px rgba(245,158,11,0)}100%{background:var(--fc-speak-bg);box-shadow:0 0 0 14px rgba(245,158,11,0);transform:scale(1)}}
+.fc-speak-active{animation:speakPress .45s ease-out}
 .unit-complete-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;animation:fadeIn .3s ease-out}
 .unit-complete-box{text-align:center;padding:40px 28px;max-width:360px;width:90%;animation:unitCompleteIn .5s cubic-bezier(.34,1.56,.64,1) forwards}
 .unit-complete-trophy{font-size:80px;display:block;animation:bounce 0.8s ease-in-out infinite alternate;margin-bottom:20px}
@@ -6755,14 +6757,17 @@ function playMs(w){[...w.okNotes,w.okNotes[2]*1.25,w.okNotes[2]*1.5].forEach((f,
 function playLU(){const n=[523,659,784,1047,784,1047,1319,1568];n.forEach((f,i)=>{tn(f,.2,"sine",.14,i*.1);tn(f*.5,.2,"triangle",.06,i*.1);});tn(1568,.6,"sine",.15,n.length*.1);}
 
 const audioCache={};
-async function speak(w){try{Object.values(audioCache).forEach(a=>{try{a.pause();a.currentTime=0;}catch(e){}});try{speechSynthesis.cancel();}catch(e){}if(audioCache[w]){audioCache[w].currentTime=0;audioCache[w].play();return;}
-// 第一優先：韋伯字典真人發音（音質最佳，經 Worker 中介保護 API Key）
-try{const r=await fetch(`https://gemini-proxy.allenwu158.workers.dev/mw-audio?word=${encodeURIComponent(w)}`);if(r.ok){const d=await r.json();if(d.audioUrl){const a=new Audio(d.audioUrl);await a.play();audioCache[w]=a;return;}}}catch(e){}
-// 第二優先：Google 翻譯語音（覆蓋率最高、品質一致、穩定）
-try{const a=new Audio(`https://translate.googleapis.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(w)}&tl=en&client=gtx`);await a.play();audioCache[w]=a;return;}catch(e){}
-// 第三備用：免費字典 API 真人錄音（部分單字才有）
-try{const r=await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${w}`);if(r.ok){const d=await r.json();const au=d[0]?.phonetics?.find(p=>p.audio?.length>0)?.audio;if(au){const url=au.startsWith("//")?("https:"+au):au;const a=new Audio(url);await a.play();audioCache[w]=a;return;}}}catch(e){}
-// 最後備用：瀏覽器內建語音
+// 音檔存放的 CDN 網域，跟唐奇單挑共用同一個 R2 音檔庫（拼字重疊即可直接沿用，不用重新生成）
+const AUDIO_BASE_URL="https://pub-fffac98b89b14ac0ab30759731e6dacb.r2.dev";
+function toAudioId(w){return w.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"")||"word";}
+async function speak(w){try{Object.values(audioCache).forEach(a=>{try{a.pause();a.currentTime=0;}catch(e){}});try{speechSynthesis.cancel();}catch(e){}
+if(audioCache[w]){
+  try{audioCache[w].currentTime=0;await audioCache[w].play();return;}
+  catch(e){delete audioCache[w];} // 快取音檔重播失敗（常見於瀏覽器判定播放請求被中斷），丟掉壞掉的快取，往下重新建立一個全新的 Audio 物件再試一次
+}
+// 唯一來源：預先生成的靜態音檔（Google Cloud TTS Neural2，全站統一聲音，穩定不受任何即時 API 影響）
+try{const a=new Audio(`${AUDIO_BASE_URL}/${toAudioId(w)}.mp3`);await a.play();audioCache[w]=a;return;}catch(e){}
+// 唯一備用：靜態音檔真的載入失敗時（例如 CDN 短暫異常），才退回瀏覽器內建語音，避免完全沒聲音
 try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(w);u.lang="en-US";u.rate=0.85;speechSynthesis.speak(u);}catch(e){}}catch(e){}}
 let lastSp="",lastSpT=0;function hSpk(w){const n=Date.now();if(w===lastSp&&n-lastSpT<800)return;lastSp=w;lastSpT=n;speak(w);}
 function spk(w,col){return`<span class="speak-word" onclick="speak('${w}')" style="color:${col||'inherit'};cursor:pointer">${w} <span style="font-size:0.65rem;opacity:0.35">🔊</span></span>`;}
@@ -7343,6 +7348,7 @@ app.innerHTML=`<div class="header" style="background:${wld.hdr}"><button id="fc-
 <div id="fc-stage" style="position:relative;height:34vh;min-height:180px;margin-bottom:6px">
   <div id="fc-card" style="position:absolute;inset:0;display:flex;align-items:stretch;justify-content:center;cursor:grab;touch-action:pan-y;will-change:transform">
     <div style="position:relative;width:100%;max-width:380px;perspective:1200px">
+      <button id="fc-speak-btn" style="position:absolute;bottom:16px;right:16px;z-index:8;--fc-speak-bg:${dk?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.06)'};background:var(--fc-speak-bg);border:none;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:1.15rem;cursor:pointer">🔊</button>
       <div id="fc-tag-known" style="position:absolute;top:20px;right:20px;border:3px solid ${GREEN};color:${GREEN};border-radius:10px;padding:4px 12px;font-size:1rem;font-weight:800;transform:rotate(12deg);opacity:0;transition:opacity .1s;z-index:5">會</div>
       <div id="fc-tag-unknown" style="position:absolute;top:20px;left:64px;border:3px solid ${ORANGE};color:${ORANGE};border-radius:10px;padding:4px 12px;font-size:1rem;font-weight:800;transform:rotate(-12deg);opacity:0;transition:opacity .1s;z-index:5">不會</div>
       <div id="fc-flipper" style="position:relative;width:100%;height:34vh;min-height:180px;transform-style:preserve-3d;transition:transform .5s;transform:rotateY(${flipped?'180deg':'0deg'})">
@@ -7395,6 +7401,16 @@ app.innerHTML=`<div class="header" style="background:${wld.hdr}"><button id="fc-
 // 真實 DOM 綁定（手機穩定）
 const back=document.getElementById("fc-back");if(back)back.addEventListener("click",()=>{S.page="flashList";render();});
 const cardEl=document.getElementById("fc-card");
+const speakBtn=document.getElementById("fc-speak-btn");
+if(speakBtn){
+  speakBtn.addEventListener("touchstart",(e)=>{e.stopPropagation();},{passive:true});
+  speakBtn.addEventListener("mousedown",(e)=>{e.stopPropagation();});
+  speakBtn.addEventListener("click",(e)=>{e.stopPropagation();e.preventDefault();speak(card.w);
+    speakBtn.classList.remove("fc-speak-active");
+    void speakBtn.offsetWidth;
+    speakBtn.classList.add("fc-speak-active");
+  });
+}
 const tagKnown=document.getElementById("fc-tag-known");
 const tagUnknown=document.getElementById("fc-tag-unknown");
 const knownBtn=document.getElementById("fc-known");if(knownBtn)knownBtn.addEventListener("click",()=>flashMark(true));
