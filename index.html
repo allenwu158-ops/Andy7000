@@ -7410,7 +7410,7 @@ app.innerHTML=`<div class="header" style="position:static;background:${wld.hdr}"
 <div style="padding:4px 0 12px">
   <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px">
     <button id="fc-undo" style="background:none;border:none;cursor:${canUndo?'pointer':'default'};opacity:${canUndo?'1':'0.25'};padding:8px;font-size:1.2rem;color:${dk?'#E2E8F0':'#1C1C1E'}">↩</button>
-    <div style="font-size:0.8rem;color:${dk?wld.dimCol:'#8E8E93'};font-weight:600">點卡片翻開看意思</div>
+    <div style="font-size:0.8rem;color:${dk?wld.dimCol:'#8E8E93'};font-weight:600">點卡片翻開看意思 · 左右滑動換卡</div>
   </div>
   <div style="display:flex;gap:10px">
     <button id="fc-unknown" style="flex:1;padding:14px;border-radius:14px;border:2px solid ${YELLOW};background:#fff;color:${YELLOW};font-weight:700;font-size:1rem;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer"><span style="color:#EF4444">✗</span> 仍在學習</button>
@@ -7473,22 +7473,46 @@ window.fcShowNoEmpty=function(filter){
   if(btn){const orig=btn.textContent;btn.textContent=msg;setTimeout(()=>{if(btn)btn.textContent=orig;},1600);}
 };
 
-// ===== 卡片手勢：只保留「點擊翻面」，不支援左右滑動換卡 =====
-// 換卡只能透過下方「仍在學習／知道」按鈕觸發，卡片本身不會跟著手指位移
+// ===== 卡片手勢：點擊翻面 + 左右滑動換卡 =====
 if(cardEl){
-  let dragging=false,startX=0,startY=0,dx=0,dy=0,moved=false;
-  const TAP_MAX=36; // 手機觸控天生會有幾像素晃動，超過這個範圍才不算是單純點擊
+  let dragging=false,startX=0,startY=0,dx=0,dy=0,moved=false,axis=null;
+  const THRESHOLD=80; // 觸發換卡判定的水平位移
+  const TAP_MAX=36;   // 視為點擊（翻面）的最大位移（手機觸控天生會有幾像素晃動，門檻放寬避免誤判成滑動）
+  const LOCK=20;      // 超過此位移就鎖定主軸方向
   function onStart(x,y){
-    dragging=true;startX=x;startY=y;dx=0;dy=0;moved=false;
+    dragging=true;startX=x;startY=y;dx=0;dy=0;moved=false;axis=null;cardEl.style.transition="none";
   }
   function onMove(x,y){
     if(!dragging)return;
     dx=x-startX;dy=y-startY;
+    // 一旦移動超過鎖定門檻，判定主軸：水平=滑動換卡，垂直=捲頁
+    if(axis===null&&(Math.abs(dx)>LOCK||Math.abs(dy)>LOCK)){
+      axis=Math.abs(dx)>Math.abs(dy)?"x":"y";
+    }
     if(Math.abs(dx)>TAP_MAX||Math.abs(dy)>TAP_MAX)moved=true;
+    // 垂直主軸：放手給瀏覽器捲動，完全不動卡片
+    if(axis==="y")return;
+    if(axis!=="x")return;
+    cardEl.style.transform=`translateX(${dx}px)`;
   }
   function onEnd(){
     if(!dragging)return;dragging=false;
-    if(!moved)flashFlip(); // 沒有明顯移動：視為點擊，翻面；有移動：不做任何事，卡片停在原地
+    // 垂直捲動，不做任何判定
+    if(axis==="y"){return;}
+    if(!moved){
+      // 沒有明顯移動：視為點擊，翻面
+      cardEl.style.transform="";
+      flashFlip();return;
+    }
+    if(axis==="x"&&Math.abs(dx)>THRESHOLD){
+      // 達標：前後翻卡瀏覽（往左滑=下一張，往右滑=上一張）
+      if(S.fcBusy)return;S.fcBusy=true;
+      flashGo(dx<0?1:-1);
+    }else{
+      // 未達標：彈回原位
+      cardEl.style.transition="transform .3s ease";
+      cardEl.style.transform="translateX(0)";
+    }
   }
   cardEl.addEventListener("touchstart",(e)=>{onStart(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
   cardEl.addEventListener("touchmove",(e)=>{onMove(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
