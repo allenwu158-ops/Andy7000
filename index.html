@@ -6771,11 +6771,12 @@ function toAudioId(w){return w.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(
     audioUnlocked=true;
     try{
       const a=new Audio(`${AUDIO_BASE_URL}/a.mp3`);
-      // 這裡故意不用 muted=true：瀏覽器很可能把「靜音播放」判定成不算數的無效播放，
-      // 導致播放權限根本沒有真正被解鎖。改用音量歸零，使用者一樣聽不到聲音，
-      // 但瀏覽器會把它當成一次「真正的播放」，藉此正確解鎖。
-      a.volume=0;
-      a.play().then(()=>{a.pause();}).catch(()=>{});
+      a.muted=true;
+      a.play().then(()=>{a.pause();a.currentTime=0;a.muted=false;}).catch(()=>{});
+      // 註：這個做法偶爾會在進首頁時漏出「A」的短暫聲音，這是已知、暫時擱置的小瑕疵。
+      // 曾經嘗試過改用音量歸零取代靜音，結果反而讓喇叭按鈕的解鎖完全失效，
+      // 代表「靜音播放不算數」這個推論是錯的，問題不在這個維度，先退回這個已知能讓
+      // 按鈕正常運作的版本，不要為了消除一個小瑕疵，冒著讓核心功能又壞掉的風險。
     }catch(e){}
   }
   document.addEventListener("touchstart",unlockAudio,{once:true,capture:true,passive:true});
