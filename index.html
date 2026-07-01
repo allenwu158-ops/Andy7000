@@ -6713,22 +6713,35 @@ const WORLDS=[
 ];
 const COMBO_PRAISE=[{min:2,t:"不錯喔！",s:"1rem"},{min:3,t:"太強了！",s:"1.1rem"},{min:5,t:"勢如破竹！",s:"1.2rem"},{min:7,t:"無人能擋！",s:"1.3rem"},{min:10,t:"天下無敵！",s:"1.5rem"},{min:15,t:"你是神嗎？！",s:"1.7rem"},{min:20,t:"前無古人！！",s:"1.9rem"}];
 
+// 這個網站用 pushState 頻繁推疊歷史紀錄（每次 render 都會推一筆），
+// 瀏覽器內建的「捲動位置自動還原」機制是設計給正常多分頁瀏覽用的，
+// 套用在這種單頁應用程式上會跟我們自己控制的捲動邏輯互相打架，
+// 導致我們設定好的捲動位置，又被瀏覽器自己的還原機制改回去。
+// 這裡明確告訴瀏覽器「捲動位置我自己管」，不要自動介入。
+if("scrollRestoration" in history){history.scrollRestoration="manual";}
 let S={page:"home",lv:null,wk:null,wxp:{},combo:0,ws:{},cQ:null,sel:null,show:false,ss:{c:0,w:0},qn:0,weakMode:false,studied:{},flash:{},fcQueue:[],fcIdx:0,fcFlip:false,fcRound:{known:0,unknown:0},fcHist:[],fcListFilter:"all"};
 function wkKey(){return S.lv+"_"+S.wk;}
-// 強制捲動到頂端：用多種寫法、在多個時間點重複嘗試，
-// 因為單一一次 window.scrollTo(0,0) 在某些情況下會被瀏覽器忽略或被其他機制蓋掉
+// 強制捲動到頂端：不是賭幾個固定時間點應該夠了，而是每一幀主動確認「真的到頂端了沒」，
+// 沒有就繼續逼它回去，直到真的成功、或撐到安全上限（約 640 毫秒）才停止
 function forceScrollTop(){
   window.scrollTo(0,0);
   document.documentElement.scrollTop=0;
   document.body.scrollTop=0;
 }
+function isAtScrollTop(){
+  return (window.scrollY||document.documentElement.scrollTop||document.body.scrollTop||0)===0;
+}
 function scheduleScrollTop(){
-  requestAnimationFrame(()=>{requestAnimationFrame(()=>{
+  let attempts=0;
+  const MAX_ATTEMPTS=40; // 約 40 幀，撐到 640 毫秒的安全上限
+  function tick(){
     forceScrollTop();
-    setTimeout(forceScrollTop,50);
-    setTimeout(forceScrollTop,150);
-    setTimeout(forceScrollTop,350);
-  });});
+    attempts++;
+    if(!isAtScrollTop()&&attempts<MAX_ATTEMPTS){
+      requestAnimationFrame(tick);
+    }
+  }
+  requestAnimationFrame(tick);
 }
 function getWkXp(){return S.wxp[wkKey()]||0;}
 function addWkXp(n){S.wxp[wkKey()]=(S.wxp[wkKey()]||0)+n;}
@@ -6967,7 +6980,6 @@ function flashSetFilter(filter){
   S.fcRound={known:0,unknown:0};
   render();
   scheduleScrollTop();
-  if(S.fcQueue[0])setTimeout(()=>speak(S.fcQueue[0].w),300);
 }
 function startFlash(lv,wk){
   try{gC();}catch(e){}
@@ -6981,7 +6993,6 @@ function startFlash(lv,wk){
   // 用兩層 requestAnimationFrame，確保瀏覽器真的把新畫面畫出來、版面計算完成之後，
   // 捲動指令才執行——如果跟 render() 同一瞬間下指令，在 iOS Safari 上常常會被忽略掉
   scheduleScrollTop();
-  if(S.fcQueue[0])setTimeout(()=>speak(S.fcQueue[0].w),300);
 }
 function flashFlip(){
   S.fcFlip=!S.fcFlip;
