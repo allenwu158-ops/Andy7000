@@ -6778,6 +6778,7 @@ function toAudioId(w){return w.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(
   document.addEventListener("touchstart",unlockAudio,{once:true,capture:true,passive:true});
   document.addEventListener("click",unlockAudio,{once:true,capture:true});
 })();
+// 暫時性除錯工具：記錄 speak() 內部實際執行的路徑與結果，確認問題解決後這段可以整段刪掉
 async function speak(w){try{Object.values(audioCache).forEach(a=>{try{a.pause();a.currentTime=0;}catch(e){}});try{speechSynthesis.cancel();}catch(e){}
 if(audioCache[w]){
   try{audioCache[w].currentTime=0;await audioCache[w].play();return;}
@@ -7501,7 +7502,8 @@ if(cardEl){
     const btn=document.getElementById("fc-speak-btn");
     if(!btn)return false;
     const r=btn.getBoundingClientRect();
-    return x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom;
+    const m=12; // 容錯緩衝：往外多留一圈，手指沒有精準點在按鈕正中央也能判定命中
+    return x>=r.left-m&&x<=r.right+m&&y>=r.top-m&&y<=r.bottom+m;
   }
   function triggerSpeakBtn(){
     const btn=document.getElementById("fc-speak-btn");
