@@ -18,10 +18,11 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html{font-size:19px;}
-body{min-height:100vh;min-height:100dvh;font-family:-apple-system,'SF Pro Display','Noto Sans TC',sans-serif;overflow-x:hidden;-webkit-font-smoothing:antialiased;transition:background .4s,color .4s;}
+html,body{overflow-anchor:none;}
+body{min-height:100vh;min-height:100dvh;font-family:-apple-system,'SF Pro Display','Noto Sans TC',sans-serif;overflow-x:clip;-webkit-font-smoothing:antialiased;transition:background .4s,color .4s;}
 button{font-family:inherit;-webkit-appearance:none;border:none;cursor:pointer;}
 .container{max-width:520px;margin:0 auto;padding:20px 20px 40px;}
-.header{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);}
+.header{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:44px;z-index:10;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);}
 .card{border-radius:16px;padding:20px;margin-bottom:12px;transition:transform .1s;}.card:active{transform:scale(0.98);}
 .option-btn{border-radius:14px;padding:18px 20px;text-align:left;font-size:1.2rem;font-weight:600;transition:all .12s;display:flex;align-items:center;justify-content:space-between;width:100%;min-height:68px;}
 .option-btn:active:not(:disabled){transform:scale(0.98);}
@@ -6913,16 +6914,22 @@ function shareAchievement(wldName,wk,numMastered){
 // 每個頁面返回時該回到哪一頁
 const BACK_MAP={mode:"home",studyList:"mode",study:"studyList",level:"mode",quiz:"level",ai:"home"};
 let _navSyncing=false; // 避免 popstate 與 pushState 互相觸發
+let _lastPushedState=null; // 記住上一次推進歷史紀錄的內容，避免同一個頁面狀態被重複推疊
 function syncHistory(){
   // render 時呼叫：把當前頁面狀態推進瀏覽器返回紀錄
   if(_navSyncing)return;
   try{
     const st={page:S.page,lv:S.lv,wk:S.wk};
-    // 首頁是底層，用 replaceState；其他頁面用 pushState 疊一層
+    const stKey=JSON.stringify(st);
+    // 首頁是底層，用 replaceState；其他頁面只有狀態真正改變時才 pushState，
+    // 同一個單元裡換卡片、答題這種畫面更新，頁面狀態沒變，不需要重複推疊歷史紀錄
+    // （疊太多筆一模一樣的紀錄，會讓瀏覽器的捲動位置還原機制出現非預期的行為）
     if(S.page==="home"){
       history.replaceState(st,"");
-    }else{
+      _lastPushedState=stKey;
+    }else if(stKey!==_lastPushedState){
       history.pushState(st,"");
+      _lastPushedState=stKey;
     }
   }catch(e){}
 }
@@ -7209,6 +7216,11 @@ if(!ok){const q=document.getElementById("q-box");if(q){q.style.animation="shakeA
 function render(){
 const app=document.getElementById("app");
 syncHistory();
+// 每次換頁都強制清除 #app 上可能殘留的 transform（例如邊緣滑動手勢留下的視覺回饋殘留）。
+// innerHTML 重建只會換掉裡面的內容，不會重置 #app 元素本身的樣式，
+// 只要 #app 帶著任何殘留的 transform，底下所有 position:fixed 的子元素
+// 就會失去「真正貼齊整個螢幕」的效果，改成貼齊 #app，造成各種定位異常
+if(app){app.style.transition="none";app.style.transform="none";}
 // 離開閃卡頁面時，清掉邊緣返回感應區（它是掛在 document.body 上，不會隨 app.innerHTML 重建而自動消失）
 if(S.page!=="flash"){
   const oldEdge=document.getElementById("fc-edge-back");
@@ -7373,8 +7385,8 @@ fcWords.forEach((w,i)=>{
     <div class="fc-list-tag" data-w="${w.w}" style="font-size:0.72rem;font-weight:700;color:${stt.color};flex-shrink:0;padding:3px 10px;border-radius:12px;border:1px solid ${stt.color}40">${stt.label}</div>
   </div>`;
 });
-app.innerHTML=`<div class="header" style="background:${wld.hdr}"><button id="fc-back" style="background:none;color:${acc};font-size:1rem;font-weight:600;padding:8px">← 返回</button><div style="text-align:center"><div style="font-size:0.7rem;font-weight:700;color:${S.fcListFilter==="no"?ORANGE:S.fcListFilter==="new"?BLUE:acc};letter-spacing:1px;margin-bottom:2px">${S.fcListFilter==="no"?"不會":S.fcListFilter==="new"?"還沒學":"全部"}</div><div style="font-size:0.95rem;font-weight:700;color:${dk?'#fff':'#1C1C1E'}">${cur} / ${total}</div></div><div style="width:52px"></div></div>
-<div class="container" style="display:flex;flex-direction:column;padding-top:4px">
+app.innerHTML=`<div class="header" style="position:fixed;top:44px;left:0;right:0;z-index:10;background:${wld.hdr}"><button id="fc-back" style="background:none;color:${acc};font-size:1rem;font-weight:600;padding:8px">← 返回</button><div style="text-align:center"><div style="font-size:0.7rem;font-weight:700;color:${S.fcListFilter==="no"?ORANGE:S.fcListFilter==="new"?BLUE:acc};letter-spacing:1px;margin-bottom:2px">${S.fcListFilter==="no"?"不會":S.fcListFilter==="new"?"還沒學":"全部"}</div><div style="font-size:0.95rem;font-weight:700;color:${dk?'#fff':'#1C1C1E'}">${cur} / ${total}</div></div><div style="width:52px"></div></div>
+<div class="container" style="display:flex;flex-direction:column;padding-top:4px;margin-top:88px">
 <div style="height:4px;border-radius:3px;background:${dk?'rgba(255,255,255,0.1)':'#E5E5EA'};margin-bottom:4px"><div style="width:${progPct}%;height:100%;border-radius:3px;background:${acc};transition:width .3s"></div></div>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
   <div style="width:44px;height:44px;border-radius:50%;border:2.5px solid ${ORANGE};display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:800;color:${ORANGE};transition:transform .2s" id="fc-cnt-unknown">${S.fcRound.unknown}</div>
