@@ -7385,8 +7385,8 @@ fcWords.forEach((w,i)=>{
     <div class="fc-list-tag" data-w="${w.w}" style="font-size:0.72rem;font-weight:700;color:${stt.color};flex-shrink:0;padding:3px 10px;border-radius:12px;border:1px solid ${stt.color}40">${stt.label}</div>
   </div>`;
 });
-app.innerHTML=`<div class="header" style="position:fixed;top:44px;left:0;right:0;z-index:10;background:${wld.hdr}"><button id="fc-back" style="background:none;color:${acc};font-size:1rem;font-weight:600;padding:8px">← 返回</button><div style="text-align:center"><div style="font-size:0.7rem;font-weight:700;color:${S.fcListFilter==="no"?ORANGE:S.fcListFilter==="new"?BLUE:acc};letter-spacing:1px;margin-bottom:2px">${S.fcListFilter==="no"?"不會":S.fcListFilter==="new"?"還沒學":"全部"}</div><div style="font-size:0.95rem;font-weight:700;color:${dk?'#fff':'#1C1C1E'}">${cur} / ${total}</div></div><div style="width:52px"></div></div>
-<div class="container" style="display:flex;flex-direction:column;padding-top:4px;margin-top:88px">
+app.innerHTML=`<div class="header" id="fc-header" style="position:fixed;top:44px;left:0;right:0;z-index:10;background:${wld.hdr}"><button id="fc-back" style="background:none;color:${acc};font-size:1rem;font-weight:600;padding:8px">← 返回</button><div style="text-align:center"><div style="font-size:0.7rem;font-weight:700;color:${S.fcListFilter==="no"?ORANGE:S.fcListFilter==="new"?BLUE:acc};letter-spacing:1px;margin-bottom:2px">${S.fcListFilter==="no"?"不會":S.fcListFilter==="new"?"還沒學":"全部"}</div><div style="font-size:0.95rem;font-weight:700;color:${dk?'#fff':'#1C1C1E'}">${cur} / ${total}</div></div><div style="width:52px"></div></div>
+<div class="container" id="fc-body-container" style="display:flex;flex-direction:column;padding-top:4px;margin-top:88px">
 <div style="height:4px;border-radius:3px;background:${dk?'rgba(255,255,255,0.1)':'#E5E5EA'};margin-bottom:4px"><div style="width:${progPct}%;height:100%;border-radius:3px;background:${acc};transition:width .3s"></div></div>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
   <div style="width:44px;height:44px;border-radius:50%;border:2.5px solid ${ORANGE};display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:800;color:${ORANGE};transition:transform .2s" id="fc-cnt-unknown">${S.fcRound.unknown}</div>
@@ -7446,6 +7446,20 @@ app.innerHTML=`<div class="header" style="position:fixed;top:44px;left:0;right:0
 </div>
 </div>`;
 // 真實 DOM 綁定（手機穩定）
+// 用實際量到的標頭高度，動態設定下面內容該留多少空間，不再用寫死的數字用猜的。
+// 標頭本身是 fixed 定位、不佔文件流的空間，所以量到多高，下面就該留多少 margin-top，
+// 這裡連續量測兩次（畫面剛出現時，跟下一幀穩定之後），避免抓到還沒排版完成的中間值。
+function syncFcHeaderSpacing(){
+  const hdr=document.getElementById("fc-header");
+  const body=document.getElementById("fc-body-container");
+  if(hdr&&body){
+    const h=hdr.offsetHeight;
+    if(h>0)body.style.marginTop=h+"px";
+  }
+}
+syncFcHeaderSpacing();
+requestAnimationFrame(()=>{requestAnimationFrame(syncFcHeaderSpacing);});
+setTimeout(syncFcHeaderSpacing,150);
 const back=document.getElementById("fc-back");if(back)back.addEventListener("click",()=>{S.page="flashList";render();});
 const cardEl=document.getElementById("fc-card");
 const speakBtn=document.getElementById("fc-speak-btn");
