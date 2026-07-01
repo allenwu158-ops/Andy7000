@@ -18,11 +18,10 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html{font-size:19px;}
-html,body{overflow-anchor:none;}
-body{min-height:100vh;min-height:100dvh;font-family:-apple-system,'SF Pro Display','Noto Sans TC',sans-serif;overflow-x:clip;-webkit-font-smoothing:antialiased;transition:background .4s,color .4s;}
+body{min-height:100vh;min-height:100dvh;font-family:-apple-system,'SF Pro Display','Noto Sans TC',sans-serif;overflow-x:hidden;-webkit-font-smoothing:antialiased;transition:background .4s,color .4s;}
 button{font-family:inherit;-webkit-appearance:none;border:none;cursor:pointer;}
 .container{max-width:520px;margin:0 auto;padding:20px 20px 40px;}
-.header{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:44px;z-index:10;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);}
+.header{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);}
 .card{border-radius:16px;padding:20px;margin-bottom:12px;transition:transform .1s;}.card:active{transform:scale(0.98);}
 .option-btn{border-radius:14px;padding:18px 20px;text-align:left;font-size:1.2rem;font-weight:600;transition:all .12s;display:flex;align-items:center;justify-content:space-between;width:100%;min-height:68px;}
 .option-btn:active:not(:disabled){transform:scale(0.98);}
@@ -46,9 +45,6 @@ button{font-family:inherit;-webkit-appearance:none;border:none;cursor:pointer;}
 @keyframes goldRain{0%{opacity:1;transform:translateY(0) rotate(0)}100%{opacity:0;transform:translateY(120vh) rotate(720deg)}}
 @keyframes shimmer{0%,100%{opacity:0.6}50%{opacity:1}}
 @keyframes speakPress{0%{background:#F59E0B;box-shadow:0 0 0 0 rgba(245,158,11,.55);transform:scale(1.1)}55%{box-shadow:0 0 0 14px rgba(245,158,11,0)}100%{background:var(--fc-speak-bg);box-shadow:0 0 0 14px rgba(245,158,11,0);transform:scale(1)}}
-@keyframes wordSpeakPulse{0%{transform:scale(1)}35%{transform:scale(1.5)}100%{transform:scale(1)}}
-.fc-word-speak{display:inline-block}
-.fc-word-speak-active{animation:wordSpeakPulse .35s ease-out}
 .fc-speak-active{animation:speakPress .45s ease-out}
 .unit-complete-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;animation:fadeIn .3s ease-out}
 .unit-complete-box{text-align:center;padding:40px 28px;max-width:360px;width:90%;animation:unitCompleteIn .5s cubic-bezier(.34,1.56,.64,1) forwards}
@@ -6717,12 +6713,6 @@ const WORLDS=[
 ];
 const COMBO_PRAISE=[{min:2,t:"不錯喔！",s:"1rem"},{min:3,t:"太強了！",s:"1.1rem"},{min:5,t:"勢如破竹！",s:"1.2rem"},{min:7,t:"無人能擋！",s:"1.3rem"},{min:10,t:"天下無敵！",s:"1.5rem"},{min:15,t:"你是神嗎？！",s:"1.7rem"},{min:20,t:"前無古人！！",s:"1.9rem"}];
 
-// 這個網站用 pushState 頻繁推疊歷史紀錄（每次 render 都會推一筆），
-// 瀏覽器內建的「捲動位置自動還原」機制是設計給正常多分頁瀏覽用的，
-// 套用在這種單頁應用程式上會跟我們自己控制的捲動邏輯互相打架，
-// 導致我們設定好的捲動位置，又被瀏覽器自己的還原機制改回去。
-// 這裡明確告訴瀏覽器「捲動位置我自己管」，不要自動介入。
-if("scrollRestoration" in history){history.scrollRestoration="manual";}
 let S={page:"home",lv:null,wk:null,wxp:{},combo:0,ws:{},cQ:null,sel:null,show:false,ss:{c:0,w:0},qn:0,weakMode:false,studied:{},flash:{},fcQueue:[],fcIdx:0,fcFlip:false,fcRound:{known:0,unknown:0},fcHist:[],fcListFilter:"all"};
 function wkKey(){return S.lv+"_"+S.wk;}
 // 強制捲動到頂端：不是賭幾個固定時間點應該夠了，而是每一幀主動確認「真的到頂端了沒」，
@@ -6917,22 +6907,16 @@ function shareAchievement(wldName,wk,numMastered){
 // 每個頁面返回時該回到哪一頁
 const BACK_MAP={mode:"home",studyList:"mode",study:"studyList",level:"mode",quiz:"level",ai:"home"};
 let _navSyncing=false; // 避免 popstate 與 pushState 互相觸發
-let _lastPushedState=null; // 記住上一次推進歷史紀錄的內容，避免同一個頁面狀態被重複推疊
 function syncHistory(){
   // render 時呼叫：把當前頁面狀態推進瀏覽器返回紀錄
   if(_navSyncing)return;
   try{
     const st={page:S.page,lv:S.lv,wk:S.wk};
-    const stKey=JSON.stringify(st);
-    // 首頁是底層，用 replaceState；其他頁面只有狀態真正改變時才 pushState，
-    // 同一個單元裡換卡片、答題這種畫面更新，頁面狀態沒變，不需要重複推疊歷史紀錄
-    // （疊太多筆一模一樣的紀錄，會讓瀏覽器的捲動位置還原機制出現非預期的行為）
+    // 首頁是底層，用 replaceState；其他頁面用 pushState 疊一層
     if(S.page==="home"){
       history.replaceState(st,"");
-      _lastPushedState=stKey;
-    }else if(stKey!==_lastPushedState){
+    }else{
       history.pushState(st,"");
-      _lastPushedState=stKey;
     }
   }catch(e){}
 }
@@ -7010,6 +6994,9 @@ function flashFlip(){
   if(flipper){
     // 直接操作 DOM 播放 3D 翻轉動畫（render 會重建 DOM 打斷動畫，故不在此 render）
     flipper.style.transform=`rotateY(${S.fcFlip?'180deg':'0deg'})`;
+    const cb=document.getElementById("fc-ctrl-back"),cf=document.getElementById("fc-ctrl-front");
+    if(cb)cb.style.display=S.fcFlip?"flex":"none";
+    if(cf)cf.style.display=S.fcFlip?"none":"flex";
   }else{render();}
 }
 function flashSwipeOut(known){
@@ -7216,28 +7203,10 @@ if(!ok){const q=document.getElementById("q-box");if(q){q.style.animation="shakeA
 function render(){
 const app=document.getElementById("app");
 syncHistory();
-// 每次換頁都強制清除 #app 上可能殘留的 transform（例如邊緣滑動手勢留下的視覺回饋殘留）。
-// innerHTML 重建只會換掉裡面的內容，不會重置 #app 元素本身的樣式，
-// 只要 #app 帶著任何殘留的 transform，底下所有 position:fixed 的子元素
-// 就會失去「真正貼齊整個螢幕」的效果，改成貼齊 #app，造成各種定位異常
-if(app){app.style.transition="none";app.style.transform="none";}
 // 離開閃卡頁面時，清掉邊緣返回感應區（它是掛在 document.body 上，不會隨 app.innerHTML 重建而自動消失）
 if(S.page!=="flash"){
   const oldEdge=document.getElementById("fc-edge-back");
   if(oldEdge)oldEdge.remove();
-}
-// 閃卡頁面讓登入橫幅改成跟著頁面正常排版流動（不再固定貼在頂端），
-// 這樣往上滑動時橫幅會自然被推走、消失，不會再跟閃卡自己的標頭搶著貼在畫面最上方。
-// 其他頁面完全不受影響，橫幅維持原本固定貼齊頂端的行為。
-const fbBar=document.getElementById("fb-bar");
-if(fbBar){
-  if(S.page==="flash"){
-    fbBar.style.position="static";
-    document.body.style.paddingTop="0";
-  }else{
-    fbBar.style.position="";
-    document.body.style.paddingTop="";
-  }
 }
 
 // === HOME ===
@@ -7379,10 +7348,26 @@ const total=S.fcQueue.length;const cur=S.fcIdx+1;
 const progPct=Math.round(cur/total*100);
 const frontTxt=card.w;const backTxt=card.m;
 const flipped=S.fcFlip;
-const ORANGE="#FF9F0A",GREEN="#34C759",YELLOW="#FBBF24";
+const ORANGE="#FF9F0A",GREEN="#34C759";
 const canUndo=S.fcHist.length>0;
+// 本單元的統計與單字列表資料
+const fcWords=wordsForLv(S.lv).slice(S.wk*SEC_SIZE,S.wk*SEC_SIZE+SEC_SIZE);
+const fcSt=flashStats(fcWords);
+const fcMasteredPct=fcSt.total?Math.round(fcSt.known/fcSt.total*100):0;
 const BLUE="#818CF8";
-app.innerHTML=`<div class="header" style="position:static;background:${wld.hdr}"><button id="fc-back" style="background:none;color:${acc};font-size:1rem;font-weight:600;padding:8px">← 返回</button><div style="text-align:center"><div style="font-size:0.7rem;font-weight:700;color:${S.fcListFilter==="no"?ORANGE:S.fcListFilter==="new"?YELLOW:acc};letter-spacing:1px;margin-bottom:2px">${S.fcListFilter==="no"?"待加強":S.fcListFilter==="new"?"還沒學":"全部"}</div><div style="font-size:0.95rem;font-weight:700;color:${dk?'#fff':'#1C1C1E'}">${cur} / ${total}</div></div><div style="width:52px"></div></div>
+function fcWordStatus(w){const st=getFlashState(w);if(st.known===true)return {label:"會",color:GREEN};if(st.known===false)return {label:"不會",color:ORANGE};return {label:"還沒學",color:dk?wld.dimCol:"#8E8E93"};}
+let fcListHTML="";
+fcWords.forEach((w,i)=>{
+  const stt=fcWordStatus(w.w);
+  const stState=getFlashState(w.w);
+  const knownVal=stState.known===true?"yes":stState.known===false?"no":"none";
+  fcListHTML+=`<div class="fc-list-row" data-w="${w.w}" data-known="${knownVal}" style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:${wld.cardBg};border:1px solid ${wld.cardBorder};border-radius:14px;margin-bottom:8px">
+    <button class="fc-list-speak" data-w="${w.w}" style="background:${dk?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.04)'};border:none;border-radius:50%;width:38px;height:38px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.95rem">🔊</button>
+    <div style="flex:1;min-width:0"><div style="font-size:1.05rem;font-weight:700;color:${dk?'#fff':'#1C1C1E'}">${w.w}</div><div style="font-size:0.85rem;color:${dk?wld.dimCol:'#8E8E93'};margin-top:2px">${w.m}</div></div>
+    <div class="fc-list-tag" data-w="${w.w}" style="font-size:0.72rem;font-weight:700;color:${stt.color};flex-shrink:0;padding:3px 10px;border-radius:12px;border:1px solid ${stt.color}40">${stt.label}</div>
+  </div>`;
+});
+app.innerHTML=`<div class="header" style="background:${wld.hdr}"><button id="fc-back" style="background:none;color:${acc};font-size:1rem;font-weight:600;padding:8px">← 返回</button><div style="text-align:center"><div style="font-size:0.7rem;font-weight:700;color:${S.fcListFilter==="no"?ORANGE:S.fcListFilter==="new"?BLUE:acc};letter-spacing:1px;margin-bottom:2px">${S.fcListFilter==="no"?"不會":S.fcListFilter==="new"?"還沒學":"全部"}</div><div style="font-size:0.95rem;font-weight:700;color:${dk?'#fff':'#1C1C1E'}">${cur} / ${total}</div></div><div style="width:52px"></div></div>
 <div class="container" style="display:flex;flex-direction:column;padding-top:4px">
 <div style="height:4px;border-radius:3px;background:${dk?'rgba(255,255,255,0.1)':'#E5E5EA'};margin-bottom:4px"><div style="width:${progPct}%;height:100%;border-radius:3px;background:${acc};transition:width .3s"></div></div>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -7390,13 +7375,14 @@ app.innerHTML=`<div class="header" style="position:static;background:${wld.hdr}"
   <div style="width:44px;height:44px;border-radius:50%;border:2.5px solid ${GREEN};display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:800;color:${GREEN};transition:transform .2s" id="fc-cnt-known">${S.fcRound.known}</div>
 </div>
 <div id="fc-stage" style="position:relative;height:34vh;min-height:180px;margin-bottom:6px">
-  <div id="fc-card" style="position:absolute;inset:0;display:flex;align-items:stretch;justify-content:center;cursor:grab;touch-action:pan-y;will-change:transform;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent">
+  <div id="fc-card" style="position:absolute;inset:0;display:flex;align-items:stretch;justify-content:center;cursor:grab;touch-action:pan-y;will-change:transform">
     <div style="position:relative;width:100%;max-width:380px;perspective:1200px">
+      <button id="fc-speak-btn" style="position:absolute;bottom:14px;right:14px;z-index:8;--fc-speak-bg:${dk?'rgba(255,255,255,0.12)':'rgba(0,0,0,0.06)'};background:var(--fc-speak-bg);border:none;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:1.15rem;cursor:pointer;touch-action:manipulation">🔊</button>
       <div id="fc-tag-known" style="position:absolute;top:20px;right:20px;border:3px solid ${GREEN};color:${GREEN};border-radius:10px;padding:4px 12px;font-size:1rem;font-weight:800;transform:rotate(12deg);opacity:0;transition:opacity .1s;z-index:5">會</div>
       <div id="fc-tag-unknown" style="position:absolute;top:20px;left:64px;border:3px solid ${ORANGE};color:${ORANGE};border-radius:10px;padding:4px 12px;font-size:1rem;font-weight:800;transform:rotate(-12deg);opacity:0;transition:opacity .1s;z-index:5">不會</div>
       <div id="fc-flipper" style="position:relative;width:100%;height:34vh;min-height:180px;transform-style:preserve-3d;transition:transform .5s;transform:rotateY(${flipped?'180deg':'0deg'})">
         <div style="position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:24px;background:${wld.cardBg};border:2px solid ${wld.cardBorder};display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.18)">
-          <div style="font-size:2.4rem;font-weight:900;color:${dk?'#fff':'#1C1C1E'};text-align:center">${frontTxt} <span class="fc-word-speak" data-w="${card.w.replace(/"/g,'')}" style="cursor:pointer;opacity:0.4;font-size:0.5em;vertical-align:middle">🔊</span></div>
+          <div style="font-size:2.4rem;font-weight:900;color:${dk?'#fff':'#1C1C1E'};text-align:center">${frontTxt}</div>
         </div>
         <div style="position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:24px;background:${dk?'rgba(245,158,11,0.1)':'#FFF7E6'};border:2px solid ${acc};display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.18);transform:rotateY(180deg)">
           <div style="font-size:0.68rem;color:${acc};text-transform:uppercase;letter-spacing:2px;margin-bottom:14px;font-weight:600">中文意思</div>
@@ -7408,84 +7394,150 @@ app.innerHTML=`<div class="header" style="position:static;background:${wld.hdr}"
   </div>
 </div>
 <div style="padding:4px 0 12px">
-  <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px">
-    <button id="fc-undo" style="background:none;border:none;cursor:${canUndo?'pointer':'default'};opacity:${canUndo?'1':'0.25'};padding:8px;font-size:1.2rem;color:${dk?'#E2E8F0':'#1C1C1E'}">↩</button>
-    <div style="font-size:0.8rem;color:${dk?wld.dimCol:'#8E8E93'};font-weight:600">點卡片翻開看意思 · 左右滑動換卡</div>
-  </div>
-  <div style="display:flex;gap:10px">
-    <button id="fc-unknown" style="flex:1;padding:14px;border-radius:14px;border:2px solid ${YELLOW};background:#fff;color:${YELLOW};font-weight:700;font-size:1rem;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer"><span style="color:#EF4444">✗</span> 仍在學習</button>
-    <button id="fc-known" style="flex:1;padding:14px;border-radius:14px;border:2px solid ${YELLOW};background:#fff;color:${YELLOW};font-weight:700;font-size:1rem;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer"><span style="color:#22C55E">✓</span> 知道</button>
+  <div id="fc-ctrl-back" style="display:${flipped?'flex':'none'};gap:12px"><button id="fc-unknown" style="flex:1;background:${dk?'rgba(255,159,10,0.12)':'#fff'};color:${ORANGE};border:2px solid ${ORANGE};border-radius:14px;padding:14px;font-size:1rem;font-weight:700;cursor:pointer">不會</button><button id="fc-known" style="flex:1;background:${GREEN};color:#fff;border:none;border-radius:14px;padding:14px;font-size:1rem;font-weight:700;cursor:pointer">會</button></div>
+  <div id="fc-ctrl-front" style="display:${flipped?'none':'flex'};align-items:center;justify-content:space-between">
+    <button id="fc-undo" style="background:none;border:none;cursor:${canUndo?'pointer':'default'};opacity:${canUndo?'1':'0.25'};padding:10px;font-size:1.4rem;color:${dk?'#E2E8F0':'#1C1C1E'}">↩</button>
+    <div style="font-size:0.85rem;color:${dk?wld.dimCol:'#8E8E93'};font-weight:600">點卡片翻開 · 左右滑動換卡</div>
+    <div style="width:44px"></div>
   </div>
 </div>
-<div style="border-top:1px solid ${wld.cardBorder};margin:8px 0 4px;padding-top:16px">
-  <div style="display:flex;gap:10px">
-    <button id="fc-big-filter-all" style="flex:1;padding:16px 8px;border-radius:14px;font-size:1rem;font-weight:700;cursor:pointer;border:2px solid ${YELLOW};background:${YELLOW};color:#fff">全部</button>
-    <button id="fc-big-filter-no" style="flex:1;padding:16px 8px;border-radius:14px;font-size:1rem;font-weight:700;cursor:pointer;border:2px solid ${YELLOW};background:${YELLOW};color:#fff">待加強</button>
-    <button id="fc-big-filter-new" style="flex:1;padding:16px 8px;border-radius:14px;font-size:1rem;font-weight:700;cursor:pointer;border:2px solid ${YELLOW};background:${YELLOW};color:#fff">還沒學</button>
+<div style="border-top:1px solid ${wld.cardBorder};margin:8px 0 20px;padding-top:24px">
+  <div style="font-size:1.05rem;font-weight:800;color:${dk?'#fff':'#1C1C1E'};margin-bottom:16px">本單元進度</div>
+  <div style="display:flex;justify-content:space-around;margin-bottom:14px">
+    <div style="text-align:center"><div id="fc-stat-known" style="font-size:1.7rem;font-weight:900;color:${GREEN}">${fcSt.known}</div><div style="font-size:0.72rem;color:${dk?wld.dimCol:'#8E8E93'};margin-top:2px">會</div></div>
+    <div style="text-align:center"><div id="fc-stat-learning" style="font-size:1.7rem;font-weight:900;color:${ORANGE}">${fcSt.learning}</div><div style="font-size:0.72rem;color:${dk?wld.dimCol:'#8E8E93'};margin-top:2px">不會</div></div>
+    <div style="text-align:center"><div id="fc-stat-fresh" style="font-size:1.7rem;font-weight:900;color:${BLUE}">${fcSt.fresh}</div><div style="font-size:0.72rem;color:${dk?wld.dimCol:'#8E8E93'};margin-top:2px">還沒學</div></div>
   </div>
+  <div style="height:10px;border-radius:5px;background:${dk?'rgba(255,255,255,0.1)':'#E5E5EA'};overflow:hidden;display:flex">
+    <div id="fc-bar-known" style="width:${fcSt.total?fcSt.known/fcSt.total*100:0}%;background:${GREEN};height:100%;transition:width .3s"></div>
+    <div id="fc-bar-learning" style="width:${fcSt.total?fcSt.learning/fcSt.total*100:0}%;background:${ORANGE};height:100%;transition:width .3s"></div>
+  </div>
+  <div id="fc-pct-text" style="font-size:0.78rem;color:${dk?wld.dimCol:'#8E8E93'};margin-top:8px;text-align:center">會 ${fcMasteredPct}%</div>
+</div>
+<div style="margin-bottom:32px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <div style="font-size:1.05rem;font-weight:800;color:${dk?'#fff':'#1C1C1E'}">單字列表</div>
+    <div style="display:flex;gap:6px;background:${dk?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.04)'};border-radius:12px;padding:3px">
+      <button id="fc-filter-all" style="border:none;border-radius:9px;padding:7px 14px;font-size:0.82rem;font-weight:700;cursor:pointer;background:${acc};color:#fff">全部</button>
+      <button id="fc-filter-no" style="border:none;border-radius:9px;padding:7px 14px;font-size:0.82rem;font-weight:700;cursor:pointer;background:transparent;color:${dk?wld.dimCol:'#8E8E93'}">不會</button>
+      <button id="fc-filter-new" style="border:none;border-radius:9px;padding:7px 14px;font-size:0.82rem;font-weight:700;cursor:pointer;background:transparent;color:${dk?wld.dimCol:'#8E8E93'}">還沒學</button>
+    </div>
+  </div>
+  <div id="fc-list-wrap">${fcListHTML}</div>
+  <div id="fc-list-empty" style="display:none;text-align:center;padding:32px 16px;color:${dk?wld.dimCol:'#8E8E93'};font-size:0.9rem">目前沒有標記「不會」的字 🎉</div>
 </div>
 </div>`;
 // 真實 DOM 綁定（手機穩定）
 const back=document.getElementById("fc-back");if(back)back.addEventListener("click",()=>{S.page="flashList";render();});
 const cardEl=document.getElementById("fc-card");
-// 卡片正面單字旁邊的喇叭：跟卡片翻面手勢共用同一個容器，
-// 一定要在 touchstart／mousedown 這個更早的時機點就攔截冒泡，
-// 不然點下去會同時觸發「播放發音」跟「翻面」兩件事。
-// 播放本身則明確綁在 touchend（手指放開）的時間點，不依賴瀏覽器合成出來的 click 事件——
-// iOS 對於太早的時機點（touchstart）呼叫播放，不一定視為有效的使用者手勢，
-// touchend 才是比較穩定、比較接近瀏覽器認可時機的做法。
-function triggerWordSpeak(el){
-  speak(el.getAttribute("data-w"));
-  el.classList.remove("fc-word-speak-active");
-  void el.offsetWidth; // 強制重新計算樣式，讓動畫能在連續點擊時重新觸發
-  el.classList.add("fc-word-speak-active");
+const speakBtn=document.getElementById("fc-speak-btn");
+if(speakBtn){
+  speakBtn.addEventListener("touchstart",(e)=>{e.stopPropagation();},{passive:true});
+  speakBtn.addEventListener("mousedown",(e)=>{e.stopPropagation();});
+  speakBtn.addEventListener("click",(e)=>{e.stopPropagation();e.preventDefault();speak(card.w);
+    speakBtn.classList.remove("fc-speak-active");
+    void speakBtn.offsetWidth;
+    speakBtn.classList.add("fc-speak-active");
+  });
 }
-document.querySelectorAll(".fc-word-speak").forEach(el=>{
-  let touchTriggered=false;
-  el.addEventListener("touchstart",(e)=>{e.stopPropagation();},{passive:true});
-  el.addEventListener("mousedown",(e)=>{e.stopPropagation();});
-  el.addEventListener("touchend",(e)=>{
-    e.stopPropagation();e.preventDefault();
-    touchTriggered=true;
-    triggerWordSpeak(el);
-    setTimeout(()=>{touchTriggered=false;},400);
-  });
-  el.addEventListener("click",(e)=>{
-    e.stopPropagation();e.preventDefault();
-    if(touchTriggered)return; // 避免觸控裝置上 touchend 跟合成的 click 重複觸發兩次播放
-    triggerWordSpeak(el);
-  });
-});
 const tagKnown=document.getElementById("fc-tag-known");
 const tagUnknown=document.getElementById("fc-tag-unknown");
 const knownBtn=document.getElementById("fc-known");if(knownBtn)knownBtn.addEventListener("click",()=>flashMark(true));
 const unknownBtn=document.getElementById("fc-unknown");if(unknownBtn)unknownBtn.addEventListener("click",()=>flashMark(false));
 const undoBtn=document.getElementById("fc-undo");if(undoBtn&&canUndo)undoBtn.addEventListener("click",()=>flashUndo());
-// 篩選按鈕：全部／不會／還沒學，點下去直接切換上方閃卡顯示的單字
-const bFilterAll=document.getElementById("fc-big-filter-all"),bFilterNo=document.getElementById("fc-big-filter-no"),bFilterNew=document.getElementById("fc-big-filter-new");
+// 單字列表發音按鈕
+document.querySelectorAll(".fc-list-speak").forEach(b=>{b.addEventListener("click",(e)=>{e.stopPropagation();e.preventDefault();speak(b.getAttribute("data-w"));});});
+// 列表篩選顯示（依 S.fcListFilter）
+function applyFcFilter(){
+  const flt=S.fcListFilter||"all";
+  const rows=document.querySelectorAll(".fc-list-row");
+  let shown=0;
+  rows.forEach(r=>{
+    const k=r.getAttribute("data-known");
+    const show=flt==="all"?true:flt==="no"?(k==="no"):(k==="none");
+    r.style.display=show?"flex":"none";
+    if(show)shown++;
+  });
+  const empty=document.getElementById("fc-list-empty");
+  if(empty){
+    if(flt==="no"&&shown===0){empty.style.display="block";empty.textContent="目前沒有標記「不會」的字 🎉";}
+    else if(flt==="new"&&shown===0){empty.style.display="block";empty.textContent="所有的字都學過了 🎉";}
+    else{empty.style.display="none";}
+  }
+  // 按鈕高亮切換
+  const bAll=document.getElementById("fc-filter-all"),bNo=document.getElementById("fc-filter-no"),bNew=document.getElementById("fc-filter-new");
+  if(bAll){bAll.style.background=flt==="all"?acc:"transparent";bAll.style.color=flt==="all"?"#fff":(dk?wld.dimCol:"#8E8E93");}
+  if(bNo){bNo.style.background=flt==="no"?ORANGE:"transparent";bNo.style.color=flt==="no"?"#fff":(dk?wld.dimCol:"#8E8E93");}
+  if(bNew){bNew.style.background=flt==="new"?BLUE:"transparent";bNew.style.color=flt==="new"?"#fff":(dk?wld.dimCol:"#8E8E93");}
+}
+const bFilterAll=document.getElementById("fc-filter-all"),bFilterNo=document.getElementById("fc-filter-no"),bFilterNew=document.getElementById("fc-filter-new");
 if(bFilterAll)bFilterAll.addEventListener("click",()=>{flashSetFilter("all");});
 if(bFilterNo)bFilterNo.addEventListener("click",()=>{flashSetFilter("no");});
 if(bFilterNew)bFilterNew.addEventListener("click",()=>{flashSetFilter("new");});
-// 沒有該類字時的提示：直接在按鈕上短暫顯示提示文字
+applyFcFilter();
+// 沒有該類字時的提示
 window.fcShowNoEmpty=function(filter){
-  const btn=document.getElementById(filter==="new"?"fc-big-filter-new":"fc-big-filter-no");
+  const btn=document.getElementById(filter==="new"?"fc-filter-new":"fc-filter-no");
   const msg=filter==="new"?"所有字都學過了 🎉":"沒有不會的字 🎉";
   if(btn){const orig=btn.textContent;btn.textContent=msg;setTimeout(()=>{if(btn)btn.textContent=orig;},1600);}
 };
+// 即時同步：標記一個字時，下面清單該字標籤即時變色 + 上方統計即時更新（不重畫整頁）
+window.flashSyncList=function(word){
+  // 更新該字的清單標籤
+  const tag=document.querySelector(`.fc-list-tag[data-w="${(word||"").replace(/"/g,'')}"]`);
+  if(tag){const stt=fcWordStatus(word);tag.textContent=stt.label;tag.style.color=stt.color;tag.style.borderColor=stt.color+"40";}
+  // 更新該列的 data-known（供篩選用）
+  const row=document.querySelector(`.fc-list-row[data-w="${(word||"").replace(/"/g,'')}"]`);
+  if(row){const stt2=getFlashState(word);row.setAttribute("data-known",stt2.known===true?"yes":stt2.known===false?"no":"none");}
+  // 重新計算統計並更新數字、進度條、百分比
+  const st=flashStats(fcWords);
+  const kE=document.getElementById("fc-stat-known"),lE=document.getElementById("fc-stat-learning"),fE=document.getElementById("fc-stat-fresh");
+  if(kE)kE.textContent=st.known;if(lE)lE.textContent=st.learning;if(fE)fE.textContent=st.fresh;
+  const bk=document.getElementById("fc-bar-known"),bl=document.getElementById("fc-bar-learning"),pt=document.getElementById("fc-pct-text");
+  if(bk)bk.style.width=(st.total?st.known/st.total*100:0)+"%";
+  if(bl)bl.style.width=(st.total?st.learning/st.total*100:0)+"%";
+  if(pt)pt.textContent="會 "+(st.total?Math.round(st.known/st.total*100):0)+"%";
+  // 若正在「不會」篩選模式，重新套用（讓剛標記的字即時進出列表）
+  if(S.fcListFilter==="no"&&typeof applyFcFilter==="function")applyFcFilter();
+};
 
-// ===== 卡片手勢：點擊翻面 + 左右滑動換卡 =====
+// ===== 滑動手勢 =====
 if(cardEl){
   let dragging=false,startX=0,startY=0,dx=0,dy=0,moved=false,axis=null;
-  const THRESHOLD=80; // 觸發換卡判定的水平位移
-  const TAP_MAX=36;   // 視為點擊（翻面）的最大位移（手機觸控天生會有幾像素晃動，門檻放寬避免誤判成滑動）
-  const LOCK=20;      // 超過此位移就鎖定主軸方向
-  function onStart(x,y){
+  const THRESHOLD=80; // 觸發判定的水平位移
+  const TAP_MAX=20;   // 視為點擊（翻面）的最大位移（放寬，避免手指自然晃動被誤判成滑動）
+  const LOCK=12;      // 超過此位移就鎖定主軸方向
+  // 用實際觸碰座標比對喇叭按鈕當下的畫面位置，不依賴 e.target，避免特定情境下事件目標判定不準確
+  function isOnSpeakBtn(x,y){
+    const btn=document.getElementById("fc-speak-btn");
+    if(!btn)return false;
+    const r=btn.getBoundingClientRect();
+    const m=12; // 容錯緩衝：往外多留一圈，手指沒有精準點在按鈕正中央也能判定命中
+    return x>=r.left-m&&x<=r.right+m&&y>=r.top-m&&y<=r.bottom+m;
+  }
+  function triggerSpeakBtn(){
+    const btn=document.getElementById("fc-speak-btn");
+    speak(card.w);
+    if(btn){btn.classList.remove("fc-speak-active");void btn.offsetWidth;btn.classList.add("fc-speak-active");}
+  }
+  let speakBtnHitOnStart=false;
+  function onStart(x,y,target){
+    const hit=isOnSpeakBtn(x,y);
+    speakBtnHitOnStart=hit;
+    if(hit){
+      // 這裡只記錄「這次觸碰起點是喇叭按鈕」，不在這裡呼叫 speak()。
+      // 原因：iOS 對於在 touchstart（手指剛碰到螢幕）這麼早的時機點呼叫播放，
+      // 不一定會被視為有效的使用者手勢；touchend（手指放開）才更接近瀏覽器認可的時機，
+      // 真正的播放觸發移到 onEnd 裡執行。這裡只需要確保不要進入拖曳／翻面判斷。
+      dragging=false;
+      return;
+    }
     dragging=true;startX=x;startY=y;dx=0;dy=0;moved=false;axis=null;cardEl.style.transition="none";
   }
   function onMove(x,y){
     if(!dragging)return;
     dx=x-startX;dy=y-startY;
-    // 一旦移動超過鎖定門檻，判定主軸：水平=滑動換卡，垂直=捲頁
+    // 一旦移動超過鎖定門檻，判定主軸：水平=翻卡，垂直=捲頁
     if(axis===null&&(Math.abs(dx)>LOCK||Math.abs(dy)>LOCK)){
       axis=Math.abs(dx)>Math.abs(dy)?"x":"y";
     }
@@ -7496,11 +7548,16 @@ if(cardEl){
     cardEl.style.transform=`translateX(${dx}px)`;
   }
   function onEnd(){
+    if(speakBtnHitOnStart){
+      speakBtnHitOnStart=false;
+      triggerSpeakBtn();
+      return;
+    }
     if(!dragging)return;dragging=false;
     // 垂直捲動，不做任何判定
     if(axis==="y"){return;}
     if(!moved){
-      // 沒有明顯移動：視為點擊，翻面
+      // 視為點擊：翻面
       cardEl.style.transform="";
       flashFlip();return;
     }
@@ -7514,13 +7571,13 @@ if(cardEl){
       cardEl.style.transform="translateX(0)";
     }
   }
-  cardEl.addEventListener("touchstart",(e)=>{onStart(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
+  cardEl.addEventListener("touchstart",(e)=>{onStart(e.touches[0].clientX,e.touches[0].clientY,e.target);},{passive:true});
   cardEl.addEventListener("touchmove",(e)=>{onMove(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
   cardEl.addEventListener("touchend",()=>{onEnd();});
   // 桌機滑鼠也支援（拖曳期間才綁 window，結束即移除，避免累積）
   function winMove(e){if(dragging)onMove(e.clientX,e.clientY);}
-  function winUp(){if(dragging){onEnd();}window.removeEventListener("mousemove",winMove);window.removeEventListener("mouseup",winUp);}
-  cardEl.addEventListener("mousedown",(e)=>{onStart(e.clientX,e.clientY);window.addEventListener("mousemove",winMove);window.addEventListener("mouseup",winUp);});
+  function winUp(){if(dragging||speakBtnHitOnStart){onEnd();}window.removeEventListener("mousemove",winMove);window.removeEventListener("mouseup",winUp);}
+  cardEl.addEventListener("mousedown",(e)=>{onStart(e.clientX,e.clientY,e.target);window.addEventListener("mousemove",winMove);window.addEventListener("mouseup",winUp);});
 
   // ===== 邊緣滑動返回：從螢幕最左邊緣往右滑，回到閃卡單元列表 =====
   // 獨立於卡片本身的手勢，用一條貼著螢幕左邊、肉眼看不到的窄長感應區來偵測，
