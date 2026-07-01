@@ -7010,9 +7010,6 @@ function flashFlip(){
   if(flipper){
     // 直接操作 DOM 播放 3D 翻轉動畫（render 會重建 DOM 打斷動畫，故不在此 render）
     flipper.style.transform=`rotateY(${S.fcFlip?'180deg':'0deg'})`;
-    const cb=document.getElementById("fc-ctrl-back"),cf=document.getElementById("fc-ctrl-front");
-    if(cb)cb.style.display=S.fcFlip?"flex":"none";
-    if(cf)cf.style.display=S.fcFlip?"none":"flex";
   }else{render();}
 }
 function flashSwipeOut(known){
@@ -7382,10 +7379,10 @@ const total=S.fcQueue.length;const cur=S.fcIdx+1;
 const progPct=Math.round(cur/total*100);
 const frontTxt=card.w;const backTxt=card.m;
 const flipped=S.fcFlip;
-const ORANGE="#FF9F0A",GREEN="#34C759";
+const ORANGE="#FF9F0A",GREEN="#34C759",YELLOW="#FBBF24";
 const canUndo=S.fcHist.length>0;
 const BLUE="#818CF8";
-app.innerHTML=`<div class="header" style="position:static;background:${wld.hdr}"><button id="fc-back" style="background:none;color:${acc};font-size:1rem;font-weight:600;padding:8px">← 返回</button><div style="text-align:center"><div style="font-size:0.7rem;font-weight:700;color:${S.fcListFilter==="no"?ORANGE:S.fcListFilter==="new"?BLUE:acc};letter-spacing:1px;margin-bottom:2px">${S.fcListFilter==="no"?"不會":S.fcListFilter==="new"?"還沒學":"全部"}</div><div style="font-size:0.95rem;font-weight:700;color:${dk?'#fff':'#1C1C1E'}">${cur} / ${total}</div></div><div style="width:52px"></div></div>
+app.innerHTML=`<div class="header" style="position:static;background:${wld.hdr}"><button id="fc-back" style="background:none;color:${acc};font-size:1rem;font-weight:600;padding:8px">← 返回</button><div style="text-align:center"><div style="font-size:0.7rem;font-weight:700;color:${S.fcListFilter==="no"?ORANGE:S.fcListFilter==="new"?YELLOW:acc};letter-spacing:1px;margin-bottom:2px">${S.fcListFilter==="no"?"待加強":S.fcListFilter==="new"?"還沒學":"全部"}</div><div style="font-size:0.95rem;font-weight:700;color:${dk?'#fff':'#1C1C1E'}">${cur} / ${total}</div></div><div style="width:52px"></div></div>
 <div class="container" style="display:flex;flex-direction:column;padding-top:4px">
 <div style="height:4px;border-radius:3px;background:${dk?'rgba(255,255,255,0.1)':'#E5E5EA'};margin-bottom:4px"><div style="width:${progPct}%;height:100%;border-radius:3px;background:${acc};transition:width .3s"></div></div>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -7411,18 +7408,20 @@ app.innerHTML=`<div class="header" style="position:static;background:${wld.hdr}"
   </div>
 </div>
 <div style="padding:4px 0 12px">
-  <div id="fc-ctrl-back" style="display:${flipped?'flex':'none'};gap:12px"><button id="fc-unknown" style="flex:1;background:${dk?'rgba(255,159,10,0.12)':'#fff'};color:${ORANGE};border:2px solid ${ORANGE};border-radius:14px;padding:14px;font-size:1rem;font-weight:700;cursor:pointer">不會</button><button id="fc-known" style="flex:1;background:${GREEN};color:#fff;border:none;border-radius:14px;padding:14px;font-size:1rem;font-weight:700;cursor:pointer">會</button></div>
-  <div id="fc-ctrl-front" style="display:${flipped?'none':'flex'};align-items:center;justify-content:space-between">
-    <button id="fc-undo" style="background:none;border:none;cursor:${canUndo?'pointer':'default'};opacity:${canUndo?'1':'0.25'};padding:10px;font-size:1.4rem;color:${dk?'#E2E8F0':'#1C1C1E'}">↩</button>
-    <div style="font-size:0.85rem;color:${dk?wld.dimCol:'#8E8E93'};font-weight:600">點卡片翻開 · 左右滑動換卡</div>
-    <div style="width:44px"></div>
+  <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px">
+    <button id="fc-undo" style="background:none;border:none;cursor:${canUndo?'pointer':'default'};opacity:${canUndo?'1':'0.25'};padding:8px;font-size:1.2rem;color:${dk?'#E2E8F0':'#1C1C1E'}">↩</button>
+    <div style="font-size:0.8rem;color:${dk?wld.dimCol:'#8E8E93'};font-weight:600">點卡片翻開看意思</div>
+  </div>
+  <div style="display:flex;gap:10px">
+    <button id="fc-unknown" style="flex:1;padding:14px;border-radius:14px;border:2px solid ${YELLOW};background:#fff;color:${YELLOW};font-weight:700;font-size:1rem;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer"><span style="color:#EF4444">✗</span> 仍在學習</button>
+    <button id="fc-known" style="flex:1;padding:14px;border-radius:14px;border:2px solid ${YELLOW};background:#fff;color:${YELLOW};font-weight:700;font-size:1rem;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer"><span style="color:#22C55E">✓</span> 知道</button>
   </div>
 </div>
 <div style="border-top:1px solid ${wld.cardBorder};margin:8px 0 4px;padding-top:16px">
   <div style="display:flex;gap:10px">
-    <button id="fc-big-filter-all" style="flex:1;padding:16px 8px;border-radius:14px;font-size:1rem;font-weight:700;cursor:pointer;border:none;background:${S.fcListFilter==="all"?acc:(dk?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.04)')};color:${S.fcListFilter==="all"?'#fff':(dk?wld.dimCol:'#8E8E93')}">全部</button>
-    <button id="fc-big-filter-no" style="flex:1;padding:16px 8px;border-radius:14px;font-size:1rem;font-weight:700;cursor:pointer;border:none;background:${S.fcListFilter==="no"?ORANGE:(dk?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.04)')};color:${S.fcListFilter==="no"?'#fff':(dk?wld.dimCol:'#8E8E93')}">不會</button>
-    <button id="fc-big-filter-new" style="flex:1;padding:16px 8px;border-radius:14px;font-size:1rem;font-weight:700;cursor:pointer;border:none;background:${S.fcListFilter==="new"?BLUE:(dk?'rgba(255,255,255,0.06)':'rgba(0,0,0,0.04)')};color:${S.fcListFilter==="new"?'#fff':(dk?wld.dimCol:'#8E8E93')}">還沒學</button>
+    <button id="fc-big-filter-all" style="flex:1;padding:16px 8px;border-radius:14px;font-size:1rem;font-weight:700;cursor:pointer;border:2px solid ${YELLOW};background:${YELLOW};color:#fff">全部</button>
+    <button id="fc-big-filter-no" style="flex:1;padding:16px 8px;border-radius:14px;font-size:1rem;font-weight:700;cursor:pointer;border:2px solid ${YELLOW};background:${YELLOW};color:#fff">待加強</button>
+    <button id="fc-big-filter-new" style="flex:1;padding:16px 8px;border-radius:14px;font-size:1rem;font-weight:700;cursor:pointer;border:2px solid ${YELLOW};background:${YELLOW};color:#fff">還沒學</button>
   </div>
 </div>
 </div>`;
@@ -7474,54 +7473,30 @@ window.fcShowNoEmpty=function(filter){
   if(btn){const orig=btn.textContent;btn.textContent=msg;setTimeout(()=>{if(btn)btn.textContent=orig;},1600);}
 };
 
-// ===== 滑動手勢 =====
+// ===== 卡片手勢：只保留「點擊翻面」，不支援左右滑動換卡 =====
+// 換卡只能透過下方「仍在學習／知道」按鈕觸發，卡片本身不會跟著手指位移
 if(cardEl){
-  let dragging=false,startX=0,startY=0,dx=0,dy=0,moved=false,axis=null;
-  const THRESHOLD=80; // 觸發判定的水平位移
-  const TAP_MAX=36;   // 視為點擊（翻面）的最大位移（手機觸控天生會有幾像素晃動，門檻放寬避免誤判成滑動）
-  const LOCK=20;      // 超過此位移就鎖定主軸方向
-  function onStart(x,y,target){
-    dragging=true;startX=x;startY=y;dx=0;dy=0;moved=false;axis=null;cardEl.style.transition="none";
+  let dragging=false,startX=0,startY=0,dx=0,dy=0,moved=false;
+  const TAP_MAX=36; // 手機觸控天生會有幾像素晃動，超過這個範圍才不算是單純點擊
+  function onStart(x,y){
+    dragging=true;startX=x;startY=y;dx=0;dy=0;moved=false;
   }
   function onMove(x,y){
     if(!dragging)return;
     dx=x-startX;dy=y-startY;
-    // 一旦移動超過鎖定門檻，判定主軸：水平=翻卡，垂直=捲頁
-    if(axis===null&&(Math.abs(dx)>LOCK||Math.abs(dy)>LOCK)){
-      axis=Math.abs(dx)>Math.abs(dy)?"x":"y";
-    }
     if(Math.abs(dx)>TAP_MAX||Math.abs(dy)>TAP_MAX)moved=true;
-    // 垂直主軸：放手給瀏覽器捲動，完全不動卡片
-    if(axis==="y")return;
-    if(axis!=="x")return;
-    cardEl.style.transform=`translateX(${dx}px)`;
   }
   function onEnd(){
     if(!dragging)return;dragging=false;
-    // 垂直捲動，不做任何判定
-    if(axis==="y"){return;}
-    if(!moved){
-      // 視為點擊：翻面
-      cardEl.style.transform="";
-      flashFlip();return;
-    }
-    if(axis==="x"&&Math.abs(dx)>THRESHOLD){
-      // 達標：前後翻卡瀏覽（往左滑=下一張，往右滑=上一張）
-      if(S.fcBusy)return;S.fcBusy=true;
-      flashGo(dx<0?1:-1);
-    }else{
-      // 未達標：彈回原位
-      cardEl.style.transition="transform .3s ease";
-      cardEl.style.transform="translateX(0)";
-    }
+    if(!moved)flashFlip(); // 沒有明顯移動：視為點擊，翻面；有移動：不做任何事，卡片停在原地
   }
-  cardEl.addEventListener("touchstart",(e)=>{onStart(e.touches[0].clientX,e.touches[0].clientY,e.target);},{passive:true});
+  cardEl.addEventListener("touchstart",(e)=>{onStart(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
   cardEl.addEventListener("touchmove",(e)=>{onMove(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
   cardEl.addEventListener("touchend",()=>{onEnd();});
   // 桌機滑鼠也支援（拖曳期間才綁 window，結束即移除，避免累積）
   function winMove(e){if(dragging)onMove(e.clientX,e.clientY);}
   function winUp(){if(dragging){onEnd();}window.removeEventListener("mousemove",winMove);window.removeEventListener("mouseup",winUp);}
-  cardEl.addEventListener("mousedown",(e)=>{onStart(e.clientX,e.clientY,e.target);window.addEventListener("mousemove",winMove);window.addEventListener("mouseup",winUp);});
+  cardEl.addEventListener("mousedown",(e)=>{onStart(e.clientX,e.clientY);window.addEventListener("mousemove",winMove);window.addEventListener("mouseup",winUp);});
 
   // ===== 邊緣滑動返回：從螢幕最左邊緣往右滑，回到閃卡單元列表 =====
   // 獨立於卡片本身的手勢，用一條貼著螢幕左邊、肉眼看不到的窄長感應區來偵測，
