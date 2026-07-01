@@ -6715,6 +6715,21 @@ const COMBO_PRAISE=[{min:2,t:"不錯喔！",s:"1rem"},{min:3,t:"太強了！",s:
 
 let S={page:"home",lv:null,wk:null,wxp:{},combo:0,ws:{},cQ:null,sel:null,show:false,ss:{c:0,w:0},qn:0,weakMode:false,studied:{},flash:{},fcQueue:[],fcIdx:0,fcFlip:false,fcRound:{known:0,unknown:0},fcHist:[],fcListFilter:"all"};
 function wkKey(){return S.lv+"_"+S.wk;}
+// 強制捲動到頂端：用多種寫法、在多個時間點重複嘗試，
+// 因為單一一次 window.scrollTo(0,0) 在某些情況下會被瀏覽器忽略或被其他機制蓋掉
+function forceScrollTop(){
+  window.scrollTo(0,0);
+  document.documentElement.scrollTop=0;
+  document.body.scrollTop=0;
+}
+function scheduleScrollTop(){
+  requestAnimationFrame(()=>{requestAnimationFrame(()=>{
+    forceScrollTop();
+    setTimeout(forceScrollTop,50);
+    setTimeout(forceScrollTop,150);
+    setTimeout(forceScrollTop,350);
+  });});
+}
 function getWkXp(){return S.wxp[wkKey()]||0;}
 function addWkXp(n){S.wxp[wkKey()]=(S.wxp[wkKey()]||0)+n;}
 W.forEach(w=>{S.ws[w.w]={streak:0,tc:0,tw:0,mastered:false};});
@@ -6951,7 +6966,7 @@ function flashSetFilter(filter){
   // 注意：fcRound（本輪會/不會計數）重置，因為這是新的一輪
   S.fcRound={known:0,unknown:0};
   render();
-  requestAnimationFrame(()=>{requestAnimationFrame(()=>{window.scrollTo(0,0);});});
+  scheduleScrollTop();
   if(S.fcQueue[0])setTimeout(()=>speak(S.fcQueue[0].w),300);
 }
 function startFlash(lv,wk){
@@ -6965,7 +6980,7 @@ function startFlash(lv,wk){
   render();
   // 用兩層 requestAnimationFrame，確保瀏覽器真的把新畫面畫出來、版面計算完成之後，
   // 捲動指令才執行——如果跟 render() 同一瞬間下指令，在 iOS Safari 上常常會被忽略掉
-  requestAnimationFrame(()=>{requestAnimationFrame(()=>{window.scrollTo(0,0);});});
+  scheduleScrollTop();
   if(S.fcQueue[0])setTimeout(()=>speak(S.fcQueue[0].w),300);
 }
 function flashFlip(){
