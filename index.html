@@ -7201,6 +7201,11 @@ if(!ok){const q=document.getElementById("q-box");if(q){q.style.animation="shakeA
 function render(){
 const app=document.getElementById("app");
 syncHistory();
+// 離開閃卡頁面時，清掉邊緣返回感應區（它是掛在 document.body 上，不會隨 app.innerHTML 重建而自動消失）
+if(S.page!=="flash"){
+  const oldEdge=document.getElementById("fc-edge-back");
+  if(oldEdge)oldEdge.remove();
+}
 
 // === HOME ===
 if(S.page==="home"){
@@ -7360,7 +7365,7 @@ fcWords.forEach((w,i)=>{
     <div class="fc-list-tag" data-w="${w.w}" style="font-size:0.72rem;font-weight:700;color:${stt.color};flex-shrink:0;padding:3px 10px;border-radius:12px;border:1px solid ${stt.color}40">${stt.label}</div>
   </div>`;
 });
-app.innerHTML=`<div class="header" style="background:${wld.hdr}"><button id="fc-back" style="background:none;color:${dk?'#E2E8F0':'#1C1C1E'};font-size:1.4rem;font-weight:400;padding:8px;line-height:1">✕</button><div style="text-align:center"><div style="font-size:0.7rem;font-weight:700;color:${S.fcListFilter==="no"?ORANGE:S.fcListFilter==="new"?BLUE:acc};letter-spacing:1px;margin-bottom:2px">${S.fcListFilter==="no"?"不會":S.fcListFilter==="new"?"還沒學":"全部"}</div><div style="font-size:0.95rem;font-weight:700;color:${dk?'#fff':'#1C1C1E'}">${cur} / ${total}</div></div><div style="width:40px"></div></div>
+app.innerHTML=`<div class="header" style="background:${wld.hdr}"><button id="fc-back" style="background:none;color:${acc};font-size:1rem;font-weight:600;padding:8px">← 返回</button><div style="text-align:center"><div style="font-size:0.7rem;font-weight:700;color:${S.fcListFilter==="no"?ORANGE:S.fcListFilter==="new"?BLUE:acc};letter-spacing:1px;margin-bottom:2px">${S.fcListFilter==="no"?"不會":S.fcListFilter==="new"?"還沒學":"全部"}</div><div style="font-size:0.95rem;font-weight:700;color:${dk?'#fff':'#1C1C1E'}">${cur} / ${total}</div></div><div style="width:52px"></div></div>
 <div class="container" style="display:flex;flex-direction:column;padding-top:4px">
 <div style="height:4px;border-radius:3px;background:${dk?'rgba(255,255,255,0.1)':'#E5E5EA'};margin-bottom:4px"><div style="width:${progPct}%;height:100%;border-radius:3px;background:${acc};transition:width .3s"></div></div>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -7571,6 +7576,58 @@ if(cardEl){
   function winMove(e){if(dragging)onMove(e.clientX,e.clientY);}
   function winUp(){if(dragging||speakBtnHitOnStart){onEnd();}window.removeEventListener("mousemove",winMove);window.removeEventListener("mouseup",winUp);}
   cardEl.addEventListener("mousedown",(e)=>{onStart(e.clientX,e.clientY,e.target);window.addEventListener("mousemove",winMove);window.addEventListener("mouseup",winUp);});
+
+  // ===== 邊緣滑動返回：從螢幕最左邊緣往右滑，回到閃卡單元列表 =====
+  // 獨立於卡片本身的手勢，用一條貼著螢幕左邊、肉眼看不到的窄長感應區來偵測，
+  // 這樣不管卡片本身左右有沒有留白，只要手指是從螢幕真正的邊緣開始滑，都抓得到
+  let edgeZone=document.getElementById("fc-edge-back");
+  if(!edgeZone){
+    edgeZone=document.createElement("div");
+    edgeZone.id="fc-edge-back";
+    edgeZone.style.cssText="position:fixed;top:0;left:0;bottom:0;width:24px;z-index:50;touch-action:pan-y;";
+    document.body.appendChild(edgeZone);
+  }
+  let edgeDragging=false,edgeStartX=0,edgeStartY=0,edgeDx=0,edgeAxis=null;
+  const EDGE_THRESHOLD=90;
+  const EDGE_LOCK=10;
+  function edgeOnStart(x,y){
+    edgeDragging=true;edgeStartX=x;edgeStartY=y;edgeDx=0;edgeAxis=null;
+    if(app)app.style.transition="none";
+  }
+  function edgeOnMove(x,y){
+    if(!edgeDragging)return;
+    const dx=x-edgeStartX,dy=y-edgeStartY;
+    if(edgeAxis===null&&(Math.abs(dx)>EDGE_LOCK||Math.abs(dy)>EDGE_LOCK)){
+      edgeAxis=Math.abs(dx)>Math.abs(dy)?"x":"y";
+    }
+    if(edgeAxis==="y"){
+      // 手指其實是想垂直捲動，不是要滑動返回，取消這次手勢
+      edgeDragging=false;
+      if(app)app.style.transform="";
+      return;
+    }
+    if(edgeAxis!=="x")return;
+    edgeDx=Math.max(0,dx); // 只允許往右拖曳，往左不動作
+    if(app)app.style.transform=`translateX(${edgeDx}px)`;
+  }
+  function edgeOnEnd(){
+    if(!edgeDragging)return;
+    edgeDragging=false;
+    if(edgeAxis==="x"&&edgeDx>EDGE_THRESHOLD){
+      // 達標：立即切換頁面，不做「滑出去、等待、再換頁」這種動畫，
+      // 避免動畫播放的空檔露出畫面底下的背景色，造成閃過一片黑畫面的問題
+      if(app){app.style.transition="none";app.style.transform="";}
+      S.page="flashList";
+      render();
+    }else if(app){
+      // 未達標：彈回原位
+      app.style.transition="transform .25s ease";
+      app.style.transform="";
+    }
+  }
+  edgeZone.addEventListener("touchstart",(e)=>{edgeOnStart(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
+  edgeZone.addEventListener("touchmove",(e)=>{edgeOnMove(e.touches[0].clientX,e.touches[0].clientY);},{passive:true});
+  edgeZone.addEventListener("touchend",()=>{edgeOnEnd();});
 }
 }
 }
