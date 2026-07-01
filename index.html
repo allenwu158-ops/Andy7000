@@ -6760,29 +6760,6 @@ const audioCache={};
 // 音檔存放的 CDN 網域
 const AUDIO_BASE_URL="https://pub-fffac98b89b14ac0ab30759731e6dacb.r2.dev";
 function toAudioId(w){return w.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"")||"word";}
-// 音訊解鎖：iOS Safari/Chrome 對於「整個分頁生命週期第一次播放聲音」有嚴格限制，
-// 必須先有一次「真正成功播放過的」音訊，瀏覽器才會把這個分頁標記為允許播放，之後才會真正放行。
-// 這裡搶在使用者點喇叭之前，趁第一次互動就先用一個真實存在的音檔（靜音播放）消耗掉這個限制，
-// 注意：不能用合成的空白音檔，內容長度為零的音檔不會被瀏覽器視為一次有效播放，等於沒解鎖到。
-(function(){
-  let audioUnlocked=false;
-  function unlockAudio(){
-    if(audioUnlocked)return;
-    audioUnlocked=true;
-    try{
-      const a=new Audio(`${AUDIO_BASE_URL}/a.mp3`);
-      a.muted=true;
-      a.play().then(()=>{a.pause();a.currentTime=0;a.muted=false;}).catch(()=>{});
-      // 註：這個做法偶爾會在進首頁時漏出「A」的短暫聲音，這是已知、暫時擱置的小瑕疵。
-      // 曾經嘗試過改用音量歸零取代靜音，結果反而讓喇叭按鈕的解鎖完全失效，
-      // 代表「靜音播放不算數」這個推論是錯的，問題不在這個維度，先退回這個已知能讓
-      // 按鈕正常運作的版本，不要為了消除一個小瑕疵，冒著讓核心功能又壞掉的風險。
-    }catch(e){}
-  }
-  document.addEventListener("touchstart",unlockAudio,{once:true,capture:true,passive:true});
-  document.addEventListener("click",unlockAudio,{once:true,capture:true});
-})();
-// 暫時性除錯工具：記錄 speak() 內部實際執行的路徑與結果，確認問題解決後這段可以整段刪掉
 async function speak(w){try{Object.values(audioCache).forEach(a=>{try{a.pause();a.currentTime=0;}catch(e){}});try{speechSynthesis.cancel();}catch(e){}
 if(audioCache[w]){
   try{audioCache[w].currentTime=0;await audioCache[w].play();return;}
@@ -6975,6 +6952,7 @@ function flashSetFilter(filter){
   S.fcRound={known:0,unknown:0};
   render();
   window.scrollTo(0,0);
+  if(S.fcQueue[0])setTimeout(()=>speak(S.fcQueue[0].w),300);
 }
 function startFlash(lv,wk){
   try{gC();}catch(e){}
@@ -6986,6 +6964,7 @@ function startFlash(lv,wk){
   S.fcIdx=0;S.fcFlip=false;S.fcRound={known:0,unknown:0};S.fcHist=[];
   render();
   window.scrollTo(0,0);
+  if(S.fcQueue[0])setTimeout(()=>speak(S.fcQueue[0].w),300);
 }
 function flashFlip(){
   S.fcFlip=!S.fcFlip;
